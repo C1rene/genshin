@@ -16,12 +16,23 @@ export default class Note extends base {
   }
 
   async getData () {
-    let { uid, ck, game_biz, region } = await gsCfg.othergame(this.e)
+    const accountInfo = await gsCfg.othergame(this.e)
+    // othergame 获取失败时会自行回复提示；这里必须停止，不能继续用 undefined CK 构造 API。
+    if (!accountInfo) return false
+
+    let { uid, ck, game_biz, region } = accountInfo
     let game = this.e.game
     let mysApi = new MysApi(uid, ck, { game }, region, game_biz)
     let device_fp = await mysApi.getData('getFp')
-    if (device_fp?.retcode !== 0) return false
-    let headers = { 'x-rpc-device_fp': device_fp?.data?.device_fp }
+    if (device_fp?.retcode !== 0 || !device_fp?.data?.device_fp) {
+      logger.error(`[崩三体力][uid:${uid}] 获取 Device FP 失败：${JSON.stringify({
+        retcode: device_fp?.retcode ?? null,
+        hasDeviceFp: Boolean(device_fp?.data?.device_fp)
+      })}`)
+      await this.e.reply('设备信息获取失败，请稍后重试')
+      return false
+    }
+    let headers = { 'x-rpc-device_fp': device_fp.data.device_fp }
 
     let note = await mysApi.getData('dailyNote', { headers })
     note = await new MysInfo(this.e).checkCode(note, 'dailyNote', mysApi, {}, true)

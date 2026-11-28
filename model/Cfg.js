@@ -8,6 +8,7 @@ import yaml from 'yaml'
 import _ from 'lodash'
 import GT_Manual from './GT-Manual/GT-Manual.js'
 import SignPermission from './SignPermission.js'
+import VerificationStats from './VerificationStats.js'
 import { resolveServerType } from './mys/serverType.js'
 let sqlite3
 try {
@@ -51,49 +52,65 @@ class Cfg {
     return _.trim(ck, ';') + `; _MHYUUID=${device_id}; `
   }
 
-  saveSk(userId, data) {
-    let file = `${this.dir}/${userId}.yaml`
-		if (_.isEmpty(data)) {
-			fs.existsSync(file) && fs.unlinkSync(file)
-		} else {
-			fs.exists(file, (exists) => {
-				if (!exists) {
-					fs.writeFileSync(file, '', 'utf8')
-				}
-				let ck = fs.readFileSync(file, 'utf-8')
-				let YAML = yaml.stringify(data)
-				ck = yaml.parse(ck)
-				if (ck?.uid || !ck) {
-					fs.writeFileSync(file, YAML, 'utf8')
-				} else {
-					if (!ck[Object.keys(data)[0]]) {
-						ck = yaml.stringify(ck)
-						fs.writeFileSync(file, YAML + ck, 'utf8')
-					} else {
-						ck[Object.keys(data)[0]] = data[Object.keys(data)[0]]
-						fs.writeFileSync(file, yaml.stringify(ck), 'utf8')
-					}
-				}
-			})
-		}
+  async saveSk(userId, data) {
+    const qq = String(userId || '')
+    const file = `${this.dir}/${qq}.yaml`
+    fs.mkdirSync(this.dir, { recursive: true })
+    let existing = {}
+    if (fs.existsSync(file)) {
+      try { existing = yaml.parse(fs.readFileSync(file, 'utf8')) || {} } catch { existing = {} }
+    }
+
+    const oldLtuids = new Set()
+    for (const [key, item] of Object.entries(existing || {})) {
+      const nested = item?.sk && typeof item.sk === 'object' ? item.sk : {}
+      const raw = typeof item === 'string' ? item : typeof item?.sk === 'string' ? item.sk : ''
+      const getRaw = field => raw.match(new RegExp(`(?:^|;\\s*)${field}=([^;]+)`))?.[1] || ''
+      const stuid = item?.stuid || nested.stuid || getRaw('stuid') || getRaw('ltuid') || getRaw('ltuid_v2') || (/^\d+$/.test(key) ? key : '')
+      if (stuid) oldLtuids.add(String(stuid))
+    }
+
+    let merged = {}
+    if (_.isEmpty(data)) {
+      if (fs.existsSync(file)) fs.unlinkSync(file)
+    } else {
+      // 保留该 QQ 原有的其他 Stoken 记录，避免新增绑定覆盖旧账号。
+      merged = existing?.uid ? data : { ...(existing || {}), ...(data || {}) }
+      fs.writeFileSync(file, yaml.stringify(merged), 'utf8')
+    }
+
+    const newLtuids = new Set()
+    for (const [key, item] of Object.entries(merged || {})) {
+      const nested = item?.sk && typeof item.sk === 'object' ? item.sk : {}
+      const raw = typeof item === 'string' ? item : typeof item?.sk === 'string' ? item.sk : ''
+      const getRaw = field => raw.match(new RegExp(`(?:^|;\\s*)${field}=([^;]+)`))?.[1] || ''
+      const stuid = item?.stuid || nested.stuid || getRaw('stuid') || getRaw('ltuid') || getRaw('ltuid_v2') || (/^\d+$/.test(key) ? key : '')
+      if (stuid) newLtuids.add(String(stuid))
+    }
+
+    for (const stuid of newLtuids) await VerificationStats.onQQBind(qq, stuid)
+    for (const stuid of oldLtuids) {
+      if (!newLtuids.has(stuid)) await VerificationStats.onQQUnbind(qq, stuid)
+    }
+    return true
   }
 
   async signCk(targetQQs = null) {
     let config = this.getConfig('config')
 
-    const collect = async (qqs) => {
+    const collect = async (qqs, source = null) => {
       let allow = new Set((qqs || []).map(v => String(v)).filter(Boolean))
+      let { cks: allCks } = source || await this.getcks(true)
       let signck = _.fromPairs(config.game.map((game) => [game, {}]))
       let signuid = _.fromPairs(config.game.map((game) => [game, []]))
 
       if (allow.size === 0)
         return { cks: signck, uids: signuid }
 
-      let { cks } = await this.getcks(true)
       for (let g of config.game)
-        for (let uid in cks[g])
-          if (allow.has(String(cks[g][uid].qq)))
-            signck[g][uid] = cks[g][uid]
+        for (let uid in allCks[g])
+          if (allow.has(String(allCks[g][uid].qq)))
+            signck[g][uid] = allCks[g][uid]
 
       for (let g of config.game)
         signuid[g] = _.map(signck[g], 'uid')
@@ -105,14 +122,20 @@ class Cfg {
     if (Array.isArray(targetQQs))
       return await collect(targetQQs)
 
-    let autoQQs = await SignPermission.getAutoQQs('game')
+    // 游戏群名单已改为黑名单，需要从完整账号集合中排除“仅属于黑名单群”的QQ；
+    // 不能再把白名单群成员集合当作全部可签到账号。
+    let all = await this.getcks(true)
+    let candidateQQs = _.uniq(config.game.flatMap(game =>
+      Object.values(all.cks[game] || {}).map(ck => String(ck?.qq ?? '')).filter(Boolean)
+    ))
+    let autoQQs = await SignPermission.getAutoQQs('game', candidateQQs)
     if (autoQQs === null) {
       logger.mark('[自动签到]未限制游戏签到范围，查询全部ck')
-      return await this.getcks(true)
+      return all
     }
 
-    logger.mark(`[自动签到]按新游戏签到权限筛选QQ，共${autoQQs.length}人`)
-    return await collect(autoQQs)
+    logger.mark(`[自动签到]按游戏签到权限筛选QQ，共${autoQQs.length}人`)
+    return await collect(autoQQs, all)
   }
 
   async getcks(all, qq = '', note = false) {
@@ -245,33 +268,30 @@ class Cfg {
   }
 
   async signSk(targetQQs = null) {
-    const collect = async (qqs) => {
+    const collect = async (qqs, source = null) => {
       let allow = new Set((qqs || []).map(v => String(v)).filter(Boolean))
       let signSks = {}
-      if (allow.size === 0)
-        return { sks: signSks, ltuids: [] }
+      if (allow.size === 0) return { sks: signSks, ltuids: [] }
 
-      let allSks = await this.getsks(true, '', true)
+      let allSks = source || await this.getsks(true, '', true)
       for (let id in allSks)
-        if (allow.has(String(allSks[id].userId)))
-          signSks[id] = allSks[id]
+        if (allow.has(String(allSks[id].userId))) signSks[id] = allSks[id]
 
       return { sks: signSks, ltuids: _.map(signSks, 'id') }
     }
 
-    // 主人手动批量任务传入明确QQ范围时，只处理这些QQ。
-    if (Array.isArray(targetQQs))
-      return await collect(targetQQs)
+    if (Array.isArray(targetQQs)) return await collect(targetQQs)
 
-    let autoQQs = await SignPermission.getAutoQQs('coin')
+    const allSks = await this.getsks(true, '', true)
+    const candidateQQs = _.uniq(Object.values(allSks).map(item => String(item?.userId || '')).filter(Boolean))
+    const autoQQs = await SignPermission.getAutoQQs('coin', candidateQQs)
     if (autoQQs === null) {
       logger.mark('[米币自动签到]未限制米币签到范围，查询全部sk')
-      let sks = await this.getsks(true, '', true)
-      return { sks, ltuids: _.map(sks, 'id') }
+      return { sks: allSks, ltuids: _.map(allSks, 'id') }
     }
 
     logger.mark(`[米币自动签到]按新米币签到权限筛选QQ，共${autoQQs.length}人`)
-    return await collect(autoQQs)
+    return await collect(autoQQs, allSks)
   }
 
   async getsks(all, qq, sign, includeIncomplete = false) {
@@ -470,15 +490,21 @@ class Cfg {
 
   async delsk(qq, stuid) {
     if (!stuid) return
-    let sks = yaml.parse(fs.readFileSync(`${this.dir}/${String(qq)}.yaml`, 'utf-8'))
-    for (let i in sks)
-      if (sks[i].stuid == stuid) delete sks[i]
+    const file = `${this.dir}/${String(qq)}.yaml`
+    if (!fs.existsSync(file)) return
+    let sks = yaml.parse(fs.readFileSync(file, 'utf-8')) || {}
+    for (const [key, item] of Object.entries(sks)) {
+      const nested = item?.sk && typeof item.sk === 'object' ? item.sk : {}
+      const raw = typeof item === 'string' ? item : typeof item?.sk === 'string' ? item.sk : ''
+      const rawStuid = raw.match(/(?:^|;\s*)(?:stuid|ltuid|ltuid_v2)=([^;]+)/)?.[1] || ''
+      const current = item?.stuid || nested.stuid || rawStuid || (/^\d+$/.test(key) ? key : '')
+      if (String(current) === String(stuid)) delete sks[key]
+    }
     logger.mark(`[qq:${qq}][stuid:${stuid}]删除失效sk`)
-    fs.writeFileSync(`${this.dir}/${String(qq)}.yaml`, yaml.stringify(sks), 'utf8')
-
-    if (_.isEmpty(sks))
-      fs.unlinkSync(`${this.dir}/${String(qq)}.yaml`)
-    return
+    if (_.isEmpty(sks)) fs.unlinkSync(file)
+    else fs.writeFileSync(file, yaml.stringify(sks), 'utf8')
+    await VerificationStats.onQQUnbind(qq, stuid)
+    return true
   }
 
   countTime(time) {

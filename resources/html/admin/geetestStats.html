@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="{{pluResPath}}MysSign/html/sign/sign.css"/>
+  <link rel="stylesheet" href="{{pluResPath}}html/admin/geetestStats.css"/>
+</head>
+<body>
+  <div class="container geetest-stats" id="container">
+    <div class="page">
+      <div class="header">
+        <div class="header-content">
+          <strong>{{title}}</strong>
+          <div class="stats-summary">
+            <div class="summary-card">
+              <div class="sign-count">本月累计：<span class="count-num">{{summary.month.total}}</span> 次</div>
+              <div>成功 {{summary.month.passed}} · 失败 {{summary.month.failed}}</div>
+            </div>
+            <div class="summary-card">
+              <div class="sign-count">今日：<span class="count-num">{{summary.today.total}}</span> 次</div>
+              <div>成功 {{summary.today.passed}} · 失败 {{summary.today.failed}}</div>
+            </div>
+            <div class="summary-card">
+              <div class="sign-count">历史累计：<span class="count-num">{{summary.lifetime.total}}</span> 次</div>
+              <div>成功 {{summary.lifetime.passed}} · 失败 {{summary.lifetime.failed}}</div>
+            </div>
+          </div>
+          <div class="stats-date">{{day}} · {{timezone}}{{if summaryIncludesPending}} · 总数含待归属记录{{/if}}</div>
+        </div>
+      </div>
+
+      {{if !hasRows}}
+      <div class="table-container stats-empty">暂无过码记录</div>
+      {{/if}}
+
+      {{if accountSection && accountSection.totalCount > 0}}
+      <div class="stats-section account-section">
+        <div class="section-name">米游社账号统计 <small>{{accountSection.totalCount}} 个账号 · 历史累计 {{accountSection.stats.lifetime.total}} 次 · 今日 {{accountSection.stats.today.total}} 次 · 本月累计 {{accountSection.stats.month.total}} 次</small></div>
+        <ul class="stats-grid">
+          {{each accountSection.rows row}}
+          <li class="stats-account">
+            <div class="stats-account-main">
+              <span class="stats-ltuid">{{row.ltuid}}{{if row.isSnapshot}} · 快照{{/if}}</span>
+              <span class="stats-success">{{row.stats.today.passed}}</span>
+              <span class="stats-fail">{{row.stats.today.failed}}</span>
+            </div>
+            <div class="stats-account-periods">
+              <span>本月 <b class="stats-success">{{row.stats.month.passed}}</b>/<b class="stats-fail">{{row.stats.month.failed}}</b></span>
+              <span>历史 <b class="stats-success">{{row.stats.lifetime.passed}}</b>/<b class="stats-fail">{{row.stats.lifetime.failed}}</b></span>
+            </div>
+          </li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+
+      {{if pendingSection && pendingSection.totalCount > 0}}
+      <div class="stats-section pending-section">
+        <div class="section-name">待归属记录 <small>· 尚未识别 ltuid，待关联明确后合并；不参与 ltuid 账号分区</small></div>
+        <ul class="stats-grid">
+          <li class="stats-account">
+            <div class="stats-account-main">
+              <span class="stats-ltuid">待归属</span>
+              <span class="stats-success">{{pendingSection.stats.today.passed}}</span>
+              <span class="stats-fail">{{pendingSection.stats.today.failed}}</span>
+            </div>
+            <div class="stats-account-periods">
+              <span>本月 <b class="stats-success">{{pendingSection.stats.month.passed}}</b>/<b class="stats-fail">{{pendingSection.stats.month.failed}}</b></span>
+              <span>历史 <b class="stats-success">{{pendingSection.stats.lifetime.passed}}</b>/<b class="stats-fail">{{pendingSection.stats.lifetime.failed}}</b></span>
+            </div>
+          </li>
+        </ul>
+        {{if pendingSection.community.lifetime.total > 0}}
+        <div class="stats-pending-note">其中社区验证码：历史 {{pendingSection.community.lifetime.total}} 次 · 今日 {{pendingSection.community.today.total}} 次</div>
+        {{/if}}
+      </div>
+      {{/if}}
+
+
+      {{if groupSection && groupSection.totalCount > 0}}
+      <div class="stats-section group-section">
+        <div class="section-name">群聊统计 <small>· {{groupSection.totalCount}} 个群 · 按当前群成员关联账号动态计算；同一 ltuid 可计入多个群{{if groupSection.skippedCount > 0}} · {{groupSection.skippedCount}} 个群成员列表获取失败，已跳过{{/if}}</small></div>
+        <ul class="stats-grid">
+          {{each groupSection.rows row}}
+          <li class="stats-account">
+            <div class="stats-account-main">
+              <span class="stats-ltuid">{{row.name}}</span>
+              <span class="stats-success">{{row.stats.today.passed}}</span>
+              <span class="stats-fail">{{row.stats.today.failed}}</span>
+            </div>
+            <div class="stats-account-periods">
+              <span>本月 <b class="stats-success">{{row.stats.month.passed}}</b>/<b class="stats-fail">{{row.stats.month.failed}}</b></span>
+              <span>历史 <b class="stats-success">{{row.stats.lifetime.passed}}</b>/<b class="stats-fail">{{row.stats.lifetime.failed}}</b></span>
+            </div>
+          </li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+
+      {{if userSection.totalCount > 0}}
+      <div class="stats-section qq-section">
+        <div class="section-name">QQ统计 <small>{{userSection.totalCount}} 个账号 · 历史累计 {{userSection.stats.lifetime.total}} 次 · 今日 {{userSection.stats.today.total}} 次 · 本月累计 {{userSection.stats.month.total}} 次</small></div>
+        <ul class="stats-grid">
+          {{each userSection.rows row}}
+          <li class="stats-account">
+            <div class="stats-account-main">
+              <span class="stats-ltuid">{{row.name}}</span>
+              <span class="stats-success">{{row.stats.today.passed}}</span>
+              <span class="stats-fail">{{row.stats.today.failed}}</span>
+            </div>
+            <div class="stats-account-periods">
+              <span>本月 <b class="stats-success">{{row.stats.month.passed}}</b>/<b class="stats-fail">{{row.stats.month.failed}}</b></span>
+              <span>历史 <b class="stats-success">{{row.stats.lifetime.passed}}</b>/<b class="stats-fail">{{row.stats.lifetime.failed}}</b></span>
+            </div>
+          </li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+
+    </div>
+  </div>
+</body>
+</html>

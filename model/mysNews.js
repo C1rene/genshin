@@ -272,14 +272,14 @@ export default class MysNews extends base {
     return this.replyMsg(img, `${param.data.post.subject}`)
   }
 
-  replyMsg(img, title) {
+  replyMsg(img, title, event = this.e) {
     if (!Array.isArray(img)) {
       img = [img]
     }
     if (!img || img.length <= 0) return false
     if (title) img = [title, ...img]
     if (img.length <= 2) return img
-    return common.makeForwardMsg(this.e, [img])
+    return common.makeForwardMsg(event, [img])
   }
 
   async mysNewsTask() {
@@ -310,7 +310,6 @@ export default class MysNews extends base {
       let now = Date.now() / 1000
 
       this.key = `Yz:${type}:mys:newPush:`
-      this.e.isGroup = true
       this.pushGroup = []
       for (let val of news) {
         if (Number(now - val.post.created_at) > interval)
@@ -472,9 +471,10 @@ export default class MysNews extends base {
     if (sended) return
 
     let game = this.game(gid)
-    // 判断是否存在群关系
-    this.e.group = Bot[botId]?.pickGroup(groupId)
-    if (!this.e.group) {
+    // 不要把目标群对象写回 this.e：定时任务可能复用最近一次消息事件，
+    // 写入 undefined 或其他群对象会污染 Yunzai/NapCat 的事件上下文。
+    const group = Bot[botId]?.pickGroup?.(groupId)
+    if (!group) {
       logger.mark(`[米游社${game}${typeName}推送] 群${botId}:${groupId}未关联`)
       return
     }
@@ -494,8 +494,20 @@ export default class MysNews extends base {
     await redis.set(`${this.key}${botId}:${groupId}:${postId}`, '1', { EX: 3600 * 10 })
     // 随机延迟10-90秒
     await common.sleep(lodash.random(10000, 90000))
-    const msg = await this.replyMsg(this[postId].img, `${game}${typeName}推送：${this[postId].title}`)
-    return this.e.group.sendMsg(msg)
+
+    // 合并转发需要群上下文；使用局部副本，不改写共享的 this.e。
+    const groupEvent = Object.create(this.e || null)
+    groupEvent.isGroup = true
+    groupEvent.group_id = groupId
+    groupEvent.self_id = botId
+    groupEvent.group = group
+
+    const msg = await this.replyMsg(
+      this[postId].img,
+      `${game}${typeName}推送：${this[postId].title}`,
+      groupEvent
+    )
+    return group.sendMsg(msg)
   }
 
   game(gid) {

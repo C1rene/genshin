@@ -1,96 +1,31 @@
-import fetch from 'node-fetch'
-import MysApi from './mys/mysApi.js'
+import DeviceManager from './device/DeviceManager.js'
 
 export default class getDeviceFp {
-  static async Fp(uid, ck, game, biz, server) {
-    let ltuid
-    if (game == 'bbs') {
-      ltuid = uid
-    } else {
-      let match = typeof ck === 'string' ? ck.match(/ltuid=(\d+)|ltuid_v2=(\d+)|stuid=(\d+)/) : null
-      ltuid = match?.[1] || match?.[2] || match?.[3]
-    }
-    if (!ltuid) return { deviceFp: null }
-    let mysapi = new MysApi(uid, ck, { game }, server, biz)
-    let deviceFp = await redis.get(`genshin:device_fp:${ltuid}:fp`) || await redis.get(`ZZZ:DEVICE_FP:${ltuid}:FP`)
-    let data = {}
-    if (!deviceFp) {
-      let bindInfo = await redis.get(`genshin:device_fp:${ltuid}:bind`) || await redis.get(`ZZZ:DEVICE_FP:${ltuid}:BIND`)
-      if (bindInfo) {
-        data = {
-          deviceFp
-        }
-        try {
-          bindInfo = JSON.parse(bindInfo)
-          data = {
-            productName: bindInfo?.deviceProduct,
-            deviceType: bindInfo?.deviceName,
-            modelName: bindInfo?.deviceModel,
-            oaid: bindInfo?.oaid,
-            osVersion: bindInfo?.androidVersion,
-            deviceInfo: bindInfo?.deviceFingerprint,
-            board: bindInfo?.deviceBoard
-          }
-        } catch (error) {
-          bindInfo = null
-        }
-      }
-      const sdk = mysapi.getUrl('getFp', data)
-      let res
-      try {
-        res = await fetch(sdk.url, {
-          headers: sdk.headers,
-          method: 'POST',
-          body: sdk.body
-        })
-      } catch (error) {
-        logger.error(error.toString())
-        if (!(game == 'wd' ? /^(10|20)[0-9]{7}/i : /^(1[0-9]|[6-9])[0-9]{8}/i).test(uid) || /_cn/.test(biz) || (game == 'bbs' && /cn_|_cn/.test(server))) {
-          deviceFp = '38d805c20d53d'
-        } else {
-          deviceFp = '38d7f4c72b736'
-        }
-        return { deviceFp }
-      }
-      const fpRes = await res.json()
-      logger.debug(`[米游社][设备指纹]${JSON.stringify(fpRes)}`)
-      deviceFp = fpRes?.data?.device_fp
-      if (!deviceFp) {
-        return { deviceFp: null }
-      }
-      await redis.set(`genshin:device_fp:${ltuid}:fp`, deviceFp, {
-        EX: 86400 * 7
+  static async Fp(uid, ck, game = 'gs', biz = '', server = '') {
+    try {
+      const ltuid = game === 'bbs'
+        ? (await DeviceManager.getLtuid(ck) || String(uid || ''))
+        : await DeviceManager.getLtuid(ck)
+      if (!ltuid) return { deviceFp: null, deviceId: null, profile: null }
+      const record = await DeviceManager.getForAccount(ltuid, ck, {
+        uid,
+        game,
+        biz,
+        server,
+        isOs: /(?:os_(?:usa|euro|asia|cht)|prod_(?:official_(?:usa|eur|asia|cht|tw|hk|kr)|gf_(?:us|usa|eu|eur|jp|sg|asia|cht|tw|hk|kr))|global)/i.test(`${server || ''} ${biz || ''}`)
       })
-      await redis.set(`ZZZ:DEVICE_FP:${ltuid}:FP`, deviceFp, {
-        EX: 86400 * 7
-      })
-      if (['bh3_cn', 'bh2_cn'].includes(biz) || !(game == 'wd' ? /^(10|20)[0-9]{7}/i : /^(1[0-9]|[6-9])[0-9]{8}/i).test(uid)) {
-        data['deviceFp'] = deviceFp
-        const deviceLogin = mysapi.getUrl('deviceLogin', data)
-        const saveDevice = mysapi.getUrl('saveDevice', data)
-        if (!!deviceLogin && !!saveDevice) {
-          logger.debug(`[米游社][设备登录]保存设备信息`)
-          try {
-            logger.debug(`[米游社][设备登录]${JSON.stringify(deviceLogin)}`)
-            const login = await fetch(deviceLogin.url, {
-              headers: deviceLogin.headers,
-              method: 'POST',
-              body: deviceLogin.body
-            })
-            const save = await fetch(saveDevice.url, {
-              headers: saveDevice.headers,
-              method: 'POST',
-              body: saveDevice.body
-            })
-            const result = await Promise.all([login.json(), save.json()])
-            logger.debug(`[米游社][设备登录]${JSON.stringify(result)}`)
-          } catch (error) {
-            logger.error(`[米游社][设备登录]${error.message}`)
-          }
-        }
+      if (!record?.deviceFp || !record?.deviceId || !record?.profile) {
+        return { deviceFp: null, deviceId: null, profile: null }
       }
+      return {
+        deviceFp: record.deviceFp,
+        deviceId: record.deviceId,
+        profile: record.profile,
+        device: record
+      }
+    } catch (error) {
+      logger.error(`[DeviceManager][getDeviceFp] ${error.stack || error.message}`)
+      return { deviceFp: null, deviceId: null, profile: null, error }
     }
-
-    return { deviceFp }
   }
 }

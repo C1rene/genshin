@@ -184,9 +184,10 @@ export class sign extends plugin {
     }
 
     async checkAccess(e, level) {
-        if (e.isMaster) return true
+        if (e.isMaster && !(level === 'coin' && SignPermission.isCoinBlacklisted(e.user_id))) return true
 
-        let permission = await SignPermission.getPermission(e.user_id)
+        let contextGroupRef = e.group_id ? `${e.self_id ?? ''}:${e.group_id}` : ''
+        let permission = await SignPermission.getPermission(e.user_id, contextGroupRef)
         if (!SignPermission.hasLevel(permission, level)) {
             await e.reply('暂无签到权限')
             return false

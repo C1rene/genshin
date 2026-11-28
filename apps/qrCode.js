@@ -4,7 +4,6 @@ import Cfg from '../model/Cfg.js'
 import User from '../model/user.js'
 import MysApi from '../model/mys/mysApi.js'
 import MysInfo from '../model/mys/mysInfo.js'
-import MysUser from '../model/mys/MysUser.js'
 import qrcode from '../model/qrCode.js'
 import GachaLog from '../model/gachaLog.js'
 
@@ -116,8 +115,8 @@ export class qrCode extends plugin {
     }
 
     /** 复用 MysApi 的统一服别判断与 Stoken 交换逻辑。 */
-    async exchangeCkBySk(sk, records = [], device = '') {
-        return await MysApi.exchangeStoken(sk, records, device)
+    async exchangeCkBySk(sk, records = []) {
+        return await MysApi.exchangeStoken(sk, records)
     }
 
     async upCookie(e) {
@@ -127,8 +126,7 @@ export class qrCode extends plugin {
 
         for (let id of ltuids) {
             const sk = sks[id]
-            const mysUser = await MysUser.create(sk.stuid)
-            const ret = await this.exchangeCkBySk(sk, sk.roles || [sk], mysUser?.device)
+            const ret = await this.exchangeCkBySk(sk, sk.roles || [sk])
             if (!ret.ok) {
                 await e.reply(`stuid:${sk.stuid}，${ret.reason}`)
                 continue
@@ -389,7 +387,7 @@ export class qrCode extends plugin {
             return false
         }
 
-        let msg = new qrcode(this.e).bindStoken(this.e, list, info)
+        let msg = await new qrcode(this.e).bindStoken(this.e, list, info)
         await this.e.reply(msg)
         await new User(this.e).bing()
         MysApi.ckRefreshCache.set(String(info.stuid), { at: Date.now(), ret: { ok: true, ck: this.e.ck, ltuid: String(info.stuid), qq: this.e.user_id } })

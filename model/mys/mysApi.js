@@ -1,4 +1,5 @@
 import md5 from 'md5'
+import crypto from 'node:crypto'
 import _ from 'lodash'
 import fetch from 'node-fetch'
 import cfg from '../../../../lib/config/config.js'
@@ -29,11 +30,14 @@ export default class MysApi {
     this.game = game || option.game || 'gs'
     this.server = Server || this.getServer()
     this.biz = Biz
+    this.deviceProfile = option.deviceProfile || null
+    this.deviceFp = option.deviceFp || this.deviceProfile?.deviceFp || ''
     this.apiTool = new ApiTool(this.uid, this.server, this.game, this.biz)
+    if (this.deviceProfile?.bbsDeviceId) this.apiTool.uuid = this.deviceProfile.bbsDeviceId
     /** 5分钟缓存 */
     this.cacheCd = 300
 
-    this._device = option.device || this.device
+    this._device = option.device || this.deviceProfile?.deviceId || this.device
     this.option = {
       log: true,
       ...option
@@ -69,7 +73,7 @@ export default class MysApi {
   static skScanCache = null
 
   static getLtuid(ck = '') {
-    let ret = String(ck || '').match(/(?:ltuid_v2|account_id_v2|stuid)=(\d+)/)
+    let ret = String(ck || '').match(/(?:ltuid_v2|account_id_v2|ltuid|account_id|stuid)=(\d+)/)
     return ret ? ret[1] : ''
   }
 
@@ -110,7 +114,7 @@ export default class MysApi {
   }
 
   /** 按全部角色元数据解析服别，并统一执行 Stoken -> v2 CK 交换。 */
-  static async exchangeStoken(sk, records = [], device = '') {
+  static async exchangeStoken(sk, records = []) {
     if (!sk?.stuid || !sk?.stoken || !sk?.mid) {
       return { ok: false, reason: 'Stoken 信息不完整' }
     }
@@ -137,7 +141,6 @@ export default class MysApi {
     const roleBiz = role.game_biz || sk.game_biz || ''
     const uid = role.uid || sk.uid || sk.stuid
     const game = getGameFromBiz(roleBiz) || 'gs'
-    const deviceId = device || ''
 
     const skText = sk.sk || `stuid=${sk.stuid};stoken=${sk.stoken};mid=${sk.mid};${sk.ltoken ? `ltoken=${sk.ltoken};` : ''}`
 
@@ -145,10 +148,23 @@ export default class MysApi {
     // 使用稳定、已在 gs API 映射中注册的 Passport 上下文，避免角色 region 导致 exchange 路由缺失。
     const passportServer = resolution.type === 'mys' ? 'cn_gf01' : 'os_usa'
     const passportBiz = resolution.type === 'mys' ? 'hk4e_cn' : 'hk4e_global'
+    const { default: DeviceManager } = await import('../device/DeviceManager.js')
+    const accountDevice = await DeviceManager.getForAccount(String(sk.stuid), '', {
+      game: 'bbs', uid, server: passportServer, biz: passportBiz,
+      isOs: resolution.type === 'hoyolab'
+    })
+    if (!accountDevice?.deviceFp || !accountDevice?.deviceId) {
+      return { ok: false, reason: '无法取得该账号的 Genshin 设备档案，已停止 Stoken 交换' }
+    }
     const mysApi = new MysApi(
       uid,
       skText,
-      { game: 'gs', log: false, device: deviceId },
+      {
+        game: 'gs', log: false,
+        device: accountDevice.deviceId,
+        deviceFp: accountDevice.deviceFp,
+        deviceProfile: accountDevice.profile
+      },
       passportServer,
       passportBiz
     )
@@ -310,7 +326,7 @@ export default class MysApi {
         stoken: stokens[0],
         mid: mids[0],
         roles: roleRecords
-      }, roleRecords, mys.device)
+      }, roleRecords)
       if (!exchange.ok) return exchange
 
       const ck = exchange.ck
@@ -363,7 +379,51 @@ export default class MysApi {
   }
 
   getUrl(type, data = {}) {
-    let urlMap = this.apiTool.getUrlMap({ ...data, deviceId: this.device })
+    const profile = data.deviceProfile || this.deviceProfile
+    if (profile) {
+      this.deviceProfile = profile
+      this._device = data.deviceId || profile.deviceId || this._device
+      this.deviceFp = data.deviceFp || profile.deviceFp || this.deviceFp
+      if (profile.bbsDeviceId) this.apiTool.uuid = profile.bbsDeviceId
+    }
+    const profileData = profile ? {
+      productName: profile.deviceProduct,
+      deviceType: profile.deviceModel,
+      modelName: profile.deviceModel,
+      oaid: profile.oaid,
+      aaid: profile.aaid,
+      vaid: profile.vaid,
+      adid: profile.adid,
+      appSetId: profile.appSetId,
+      bbsDeviceId: profile.bbsDeviceId,
+      hoyolabDeviceId: profile.bbsDeviceId,
+      seedId: profile.seedId,
+      fpDeviceId: profile.fpDeviceId,
+      seedFp: profile.seedFp,
+      osVersion: profile.androidVersion,
+      deviceInfo: profile.deviceFingerprint,
+      board: profile.deviceBoard,
+      hardware: profile.hardware,
+      screenSize: profile.screenSize,
+      sdkVersion: profile.sdkVersion,
+      packageName: profile.packageName,
+      serialNumber: profile.serialNumber,
+      buildTime: profile.buildTime,
+      buildUser: profile.buildUser,
+      ramCapacity: profile.ramCapacity,
+      ramRemain: profile.ramRemain,
+      romCapacity: profile.romCapacity,
+      romRemain: profile.romRemain,
+      sdCapacity: profile.sdCapacity,
+      sdRemain: profile.sdRemain,
+      batteryStatus: profile.batteryStatus,
+      accelerometer: profile.accelerometer,
+      magnetometer: profile.magnetometer,
+      gyroscope: profile.gyroscope,
+      appInstallTimeDiff: profile.appInstallTimeDiff,
+      appUpdateTimeDiff: profile.appUpdateTimeDiff
+    } : {}
+    let urlMap = this.apiTool.getUrlMap({ ...profileData, ...data, deviceProfile: profile, deviceId: data.deviceId || this.device })
     if (!urlMap[type]) return false
 
     let { url, query = '', body = '', config = '', types = '', sign = ''  } = urlMap[type]
@@ -374,44 +434,32 @@ export default class MysApi {
     this.forumid = data.forumid || ''
     let headers = this.getHeaders(types, query, body, sign)
 
-    // 如果有设备指纹，写入设备指纹
-    if (data.deviceFp) {
-      headers['x-rpc-device_fp'] = data.deviceFp
-      // 兼容喵崽
-      this._device_fp = { data: { device_fp: data.deviceFp } }
-    }
-
-    // 如果有设备ID，写入设备ID（传入的，这里是绑定设备方法1中的设备ID）
-    if (data.deviceId) headers['x-rpc-device_id'] = data.deviceId
-
-    // 如果有绑定设备信息，写入绑定设备信息，否则写入默认设备信息
-    if (data?.deviceInfo && data?.modelName && data?.osVersion) {
-      const osVersion = data.osVersion
-      const modelName = data.modelName
-      const deviceBrand = data.deviceInfo?.split('/')[0]
-      const deviceDisplay = data.deviceInfo?.split('/')[3]
-      try {
-        headers['x-rpc-device_name'] = `${deviceBrand} ${modelName}`
-        headers['x-rpc-device_model'] = modelName
-        headers['x-rpc-csm_source'] = 'myself'
-        // 国际服不需要绑定设备，故写入的'User-Agent'为国服
+    if (profile) {
+      const osVersion = profile.androidVersion || '13'
+      const modelName = profile.deviceModel || 'XQ-BC52'
+      const deviceBrand = profile.brand || profile.deviceFingerprint?.split('/')[0] || 'Android'
+      const deviceDisplay = profile.deviceFingerprint?.split('/')[3] || 'release'
+      headers['x-rpc-device_id'] = profile.deviceId
+      headers['x-rpc-device_name'] = profile.deviceName || `${deviceBrand} ${modelName}`
+      headers['x-rpc-device_model'] = modelName
+      headers['x-rpc-sys_version'] = osVersion
+      headers['x-rpc-csm_source'] = 'myself'
+      if (headers['User-Agent'] && !/^okhttp\//i.test(headers['User-Agent'])) {
         headers['User-Agent'] = `Mozilla/5.0 (Linux; Android ${osVersion}; ${modelName} Build/${deviceDisplay}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 Mobile Safari/537.36 miHoYoBBS/2.118.1`
-      } catch (error) {
-        logger.error(`[genshin]设备信息解析失败：${error.message}`)
-      }
-    } else {
-      try {
-        headers['x-rpc-device_name'] = 'Sony XQ-BC52'
-        headers['x-rpc-device_model'] = 'XQ-BC52'
-        headers['x-rpc-csm_source'] = 'myself'
-      } catch (error) {
-        logger.error(`[genshin]设备信息解析失败：${error.message}`)
       }
     }
+
+    const deviceFp = data.deviceFp || profile?.deviceFp || this.deviceFp
+    if (deviceFp) {
+      headers['x-rpc-device_fp'] = deviceFp
+      this._device_fp = { retcode: 0, data: { device_fp: deviceFp } }
+    }
+    const deviceId = data.deviceId || profile?.deviceId
+    if (deviceId) headers['x-rpc-device_id'] = deviceId
 
     if (type == 'deviceLogin' || type == 'saveDevice') {
       try {
-        headers['x-rpc-sys_version'] = '13'
+        headers['x-rpc-sys_version'] = profile?.androidVersion || '13'
         headers['x-rpc-client_type'] = '2'
         headers['x-rpc-channel'] = 'miyousheluodi'
         headers['x-rpc-csm_source'] = 'home'
@@ -484,39 +532,48 @@ export default class MysApi {
     let originData = { ...data }
     data = { ...data }
 
-    if (!this.types.includes(type)) {
-      let ltuid
-      if (this.game == 'bbs') {
-        ltuid = this.uid
-      } else {
-        const uidMatch = typeof this.cookie === 'string'
-          ? this.cookie.match(/ltuid=(\d+)|ltuid_v2=(\d+)|stuid=(\d+)/)
-          : null
-        ltuid = uidMatch?.[1] || uidMatch?.[2] || uidMatch?.[3]
-      }
-      if (ltuid) {
-        let bindInfo = await redis.get(`genshin:device_fp:${ltuid}:bind`) || await redis.get(`ZZZ:DEVICE_FP:${ltuid}:BIND`)
-        if (bindInfo) {
-          try {
-            bindInfo = JSON.parse(bindInfo)
-            data = {
-              ...data,
-              productName: bindInfo?.deviceProduct,
-              deviceType: bindInfo?.deviceName,
-              modelName: bindInfo?.deviceModel,
-              oaid: bindInfo?.oaid,
-              osVersion: bindInfo?.androidVersion,
-              deviceInfo: bindInfo?.deviceFingerprint,
-              board: bindInfo?.deviceBoard
-            }
-          } catch (error) {
-            bindInfo = null
-          }
+    // 所有账号设备信息统一由 Genshin DeviceManager 提供；不再读取 ZZZ 命名空间或手动绑定键。
+    const explicitProfile = data.deviceProfile || this.option.deviceProfile || null
+    if (explicitProfile) {
+      data.deviceProfile = explicitProfile
+      data.deviceId = explicitProfile.deviceId
+      data.deviceFp = explicitProfile.deviceFp
+      this.deviceProfile = explicitProfile
+      this._device = data.deviceId || this._device
+      this.deviceFp = data.deviceFp || this.deviceFp
+      if (data.deviceFp) this._device_fp = { retcode: 0, data: { device_fp: data.deviceFp } }
+    } else {
+      const ltuid = this.game === 'bbs'
+        ? (MysApi.getLtuid(this.cookie) || String(this.uid || ''))
+        : MysApi.getLtuid(this.cookie)
+      if (ltuid && /^\d{4,12}$/.test(String(ltuid))) {
+        const device = await getDeviceFp.Fp(this.uid, this.cookie, this.game, this.biz, this.server)
+        if (!device?.deviceFp || !device?.deviceId || !device?.profile) {
+          logger.error(`[DeviceManager][ltuid:${ltuid}] 无法取得完整设备档案，已中止 ${type} 请求`)
+          return false
         }
-        const { deviceFp } = await getDeviceFp.Fp(this.uid, this.cookie, this.game, this.biz, this.server)
-        if (deviceFp) data = { ...data, deviceFp }
-        let device_id = await redis.get(`genshin:device_fp:${ltuid}:id`) || await redis.get(`ZZZ:DEVICE_FP:${ltuid}:ID`)
-        if (device_id) data = { ...data, deviceId: device_id }
+        data = {
+          ...data,
+          deviceId: device.deviceId,
+          deviceFp: device.deviceFp,
+          deviceProfile: device.profile
+        }
+        this.deviceProfile = device.profile
+        this.deviceRecord = device.device || null
+        this.deviceLtuid = String(ltuid)
+        this._device = device.deviceId
+        this.deviceFp = device.deviceFp
+        this._device_fp = { retcode: 0, data: { device_fp: device.deviceFp } }
+      } else if (type === 'qrCodeLogin' || type === 'qrCodeQuery') {
+        const { default: DeviceManager } = await import('../device/DeviceManager.js')
+        const session = await DeviceManager.createLoginSession('', { game: 'bbs', server: 'cn_gf01', biz: 'hk4e_cn' })
+        this.deviceProfile = session.profile
+        this.option.deviceProfile = session.profile
+        this.deviceSessionId = session.sessionId
+        this._device = session.deviceId
+        this.deviceFp = session.deviceFp
+        this._device_fp = { retcode: 0, data: { device_fp: session.deviceFp } }
+        data = { ...data, deviceId: session.deviceId, deviceFp: session.deviceFp, deviceProfile: session.profile }
       }
     }
 
@@ -627,10 +684,17 @@ export default class MysApi {
     }
 
     res.api = type
+    if (Number(res.retcode) === 5003 && this.deviceProfile) {
+      const profile = this.deviceProfile || {}
+      const record = this.deviceRecord || {}
+      logger.warn(`[DeviceManager][ltuid:${this.deviceLtuid || 'unknown'}] ${type} 返回 retcode=5003；设备字段长度：deviceId=${String(profile.deviceId || this._device || '').length}, deviceFp=${String(profile.deviceFp || this.deviceFp || '').length}, fpDeviceId=${String(profile.fpDeviceId || '').length}, seedFp=${String(profile.seedFp || '').length}, registrationId=${String(profile.registrationId || '').length}；registered=${Boolean(record.registeredAt)}, registerAttempted=${Boolean(record.registerAttemptAt)}, cookieTokenPresent=${/(?:^|[;\s&])cookie_token(?:_v2)?=/.test(String(this.cookie || ''))}`)
+    }
     if (cached) this.cache(res, cacheKey)
 
+    // 社区签到使用 SK，不能换成 CK 重试；保留原始登录失效结果。
+    const isBbsSk = this.game === 'bbs' && /(?:^|;)\s*stoken\s*=/.test(reqCk)
     // 只有实际游戏 Cookie 请求才尝试自动刷新；Stoken 交换接口本身不能递归刷新。
-    if (!refreshed && !/exchange|getBySToken/.test(type) && MysApi.isLoginError(res)) {
+    if (!isBbsSk && !refreshed && !/exchange|getBySToken/.test(type) && MysApi.isLoginError(res)) {
       let refresh = await MysApi.refreshCk(reqCk, this.uid, this.game, this.server, this.biz)
       this._ckRefreshResult = refresh
       if (refresh?.ok && refresh.ck && refresh.ck !== reqCk) {
@@ -649,11 +713,17 @@ export default class MysApi {
   }
 
   getHeaders(types, query = '', body = '', sign = false) {
+    const profile = this.deviceProfile || {}
+    const osVersion = profile.androidVersion || '13'
+    const modelName = profile.deviceModel || 'XQ-BC52'
+    const deviceName = profile.deviceName || 'Sony XQ-BC52'
+    const buildId = profile.deviceFingerprint?.split('/')[3] || '61.2.A.0.472A'
+    const androidAgent = `Mozilla/5.0 (Linux; Android ${osVersion}; ${modelName} Build/${buildId}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 Mobile Safari/537.36`
     const header = {
       'x-rpc-app_version': '2.118.1',
       'x-rpc-client_type': '5',
       'x-rpc-device_id': this._device,
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 13; XQ-BC52 Build/61.2.A.0.472A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 Mobile Safari/537.36 miHoYoBBS/2.118.1',
+      'User-Agent': `${androidAgent} miHoYoBBS/2.118.1`,
       Referer: 'https://act.mihoyo.com/'
     }
 
@@ -661,7 +731,7 @@ export default class MysApi {
       'x-rpc-app_version': '4.23.0',
       'x-rpc-client_type': '2',
       'x-rpc-device_id': this._device,
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 13; XQ-BC52 Build/61.2.A.0.472A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 Mobile Safari/537.36 miHoYoBBSOversea/4.23.0',
+      'User-Agent': `${androidAgent} miHoYoBBSOversea/4.23.0`,
       Referer: 'https://act.hoyolab.com/'
     }
 
@@ -672,9 +742,9 @@ export default class MysApi {
       Referer: 'https://app.mihoyo.com/',
       'User-Agent': 'okhttp/4.9.3',
       'x-rpc-device_id': this._device,
-      'x-rpc-device_model': 'XQ-BC52',
-      'x-rpc-device_name': 'Sony XQ-BC52',
-      'x-rpc-sys_version': '13'
+      'x-rpc-device_model': modelName,
+      'x-rpc-device_name': deviceName,
+      'x-rpc-sys_version': osVersion
     }
 
     let client
@@ -686,9 +756,9 @@ export default class MysApi {
 
     let signgame = this.game == 'gs' ? 'hk4e' : this.game == 'sr' ? 'hkrpg' : this.game == 'zzz' ? 'zzz' : this.game == 'bh3' ? 'bh3' : this.game == 'bh2' ? 'bh2' : 'nxx'
     let x_rpc = {
-      'x-rpc-device_model': 'XQ-BC52',
-      'x-rpc-device_name': 'Sony XQ-BC52',
-      'x-rpc-sys_version': '13',
+      'x-rpc-device_model': modelName,
+      'x-rpc-device_name': deviceName,
+      'x-rpc-sys_version': osVersion,
       'x-rpc-signgame': signgame,
       'x-rpc-platform': 'android'
     }
@@ -720,18 +790,18 @@ export default class MysApi {
       case 'qrcode':
         return {
           'Host': 'passport-api.miyoushe.com',
-          'x-rpc-device_os': 'Windows 10 64-bit',
-          'x-rpc-lifecycle_id': 'ad09f4ea50',
+          'x-rpc-device_os': `Android ${this.deviceProfile?.androidVersion || '13'}`,
+          'x-rpc-lifecycle_id': this.deviceProfile?.bbsDeviceId || crypto.randomUUID(),
           'x-rpc-app_id': 'bll8iq97cem8',
           'x-rpc-device_id': this._device,
-          'x-rpc-device_name': 'Chrome',
-          "x-rpc-device_fp": '38d805974f6af',
-          'x-rpc-client_type': '4',
+          'x-rpc-device_name': this.deviceProfile?.deviceName || 'Android',
+          'x-rpc-device_fp': this.deviceFp || this.deviceProfile?.deviceFp || '',
+          'x-rpc-client_type': '2',
           'x-rpc-game_biz': 'bbs_cn',
-          'x-rpc-sdk_version': '2.54.0',
-          'x-rpc-device_model': 'Chrome 149.0.0.0',
+          'x-rpc-sdk_version': '1.3.1.2',
+          'x-rpc-device_model': this.deviceProfile?.deviceModel || 'Android',
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+          'User-Agent': `okhttp/4.8.0`,
           'Connection': 'Keep-Alive',
           'Accept-Encoding': 'gzip, deflate, br'
         }
@@ -747,6 +817,9 @@ export default class MysApi {
       case 'exchange':
         return {
           ...header,
+          'x-rpc-device_fp': this.deviceFp || this.deviceProfile?.deviceFp || '',
+          'x-rpc-device_name': this.deviceProfile?.deviceName || 'Android',
+          'x-rpc-device_model': this.deviceProfile?.deviceModel || 'Android',
           'x-rpc-app_id': 'bll8iq97cem8'
         }
       case 'getBySToken':
@@ -798,11 +871,7 @@ export default class MysApi {
   }
 
   getGuid() {
-    function S4() {
-      return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
-    }
-
-    return (S4() + S4() + '-' + S4() + '-' + S4() + '-' + S4() + '-' + S4() + S4() + S4())
+    return crypto.randomUUID().toLowerCase()
   }
 
   randomString(length = 32) {

@@ -61,18 +61,16 @@ export class role extends plugin {
 
   /** 接受到消息都会先执行一次 */
   accept() {
-    if (!this.e.msg) return
-    if (!/^#(.*)$/.test(this.e.msg)) return
+    if (!this.e.msg || !/^#(.*)$/.test(this.e.msg)) return
 
-    let role = gsCfg.getRole(this.e.msg)
+    // 角色面板已交由 Miao-Plugin 处理。
+    // 将 Genshin 原有的“直接发送角色别名”快捷输入转成 Miao 可识别的面板命令。
+    let role = gsCfg.getRole(this.e.msg, '', this.e.isSr)
     if (role) {
-      /** 设置命令 */
-      this.e.msg = '#角色详情'
-      if (role.uid) this.e.msg += role.uid
-      /** 角色id */
-      this.e.roleId = role.roleId
-      /** 角色名称 */
-      this.e.roleName = role.alias
+      const prefix = this.e.isSr ? '#星铁' : '#'
+      const forwardedMsg = `${prefix}${role.alias}面板${role.uid || ''}`
+      this.e.msg = forwardedMsg
+      this.e.original_msg = forwardedMsg
       return true
     }
   }

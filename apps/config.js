@@ -15,12 +15,12 @@ export class config extends plugin {
             priority: Cfg.getConfig('config').priority,
             rule: [
                 {
-                    reg: '^#?签到(添加|删除)?(米币|游戏)白名单群.*$',
+                    reg: '^#?签到(添加|删除)?(米币|游戏)(白名单|黑名单)群.*$',
                     permission: 'master',
                     fnc: 'setGroupWhite'
                 },
                 {
-                    reg: '^#?(米币)?签到(添加|删除)?(白名单|推送)(QQ|群)?.*$',
+                    reg: '^#?(米币)?签到(添加|删除)?(白名单|黑名单|推送)(QQ|群)?.*$',
                     permission: 'master',
                     fnc: 'setwhite'
                 },
@@ -35,12 +35,13 @@ export class config extends plugin {
     async setGroupWhite(e) {
         let white = Cfg.getConfig('white')
         let isCoin = e.msg.includes('米币')
+        if (isCoin && e.msg.includes('黑名单')) return e.reply('米币签到群仍使用白名单设置')
         let key = isCoin ? 'bbsGroup' : 'gameGroup'
         if (!Array.isArray(white[key])) white[key] = []
 
         let action = e.msg.includes('添加') ? '添加' : e.msg.includes('删除') ? '删除' : '查看'
         let id = e.msg
-            .replace(/^#?签到(添加|删除)?(米币|游戏)白名单群\s*/i, '')
+            .replace(/^#?签到(添加|删除)?(米币|游戏)(白名单|黑名单)群\s*/i, '')
             .trim()
 
         let botId = e.self_id ?? (Array.isArray(Bot.uin) ? Bot.uin[0] : Bot.uin)
@@ -50,7 +51,7 @@ export class config extends plugin {
             id = `${botId}:${id}`
 
         if (action === '查看' || !id) {
-            let name = isCoin ? '米币签到白名单群' : '游戏签到白名单群'
+            let name = isCoin ? '米币签到白名单群' : '游戏签到黑名单群'
             let msg = white[key].length
                 ? white[key].map((v, i) => `${i + 1}. ${v}`).join('\n')
                 : `${name}为空`
@@ -59,30 +60,34 @@ export class config extends plugin {
 
         if (action === '添加') {
             if (white[key].includes(id))
-                return e.reply(`群:${id}已在${isCoin ? '米币' : '游戏'}白名单中`)
+                return e.reply(`群:${id}已在${isCoin ? '米币白名单' : '游戏黑名单'}中`)
             white[key].push(id)
             Cfg.setConfig('white', white)
-            return e.reply(`已添加${isCoin ? '米币' : '游戏'}白名单群:${id}`)
+            return e.reply(`已添加${isCoin ? '米币白名单群' : '游戏黑名单群'}:${id}`)
         }
 
         let index = white[key].findIndex(v => String(v) === String(id))
         if (index === -1)
-            return e.reply(`群:${id}未在${isCoin ? '米币' : '游戏'}白名单中`)
+            return e.reply(`群:${id}未在${isCoin ? '米币白名单' : '游戏黑名单'}中`)
 
         white[key].splice(index, 1)
         Cfg.setConfig('white', white)
-        return e.reply(`已删除${isCoin ? '米币' : '游戏'}白名单群:${id}`)
+        return e.reply(`已删除${isCoin ? '米币白名单群' : '游戏黑名单群'}:${id}`)
     }
 
     async setwhite(e) {
         let white = Cfg.getConfig('white')
         let isCoin = /^#?米币签到/.test(e.msg)
         let isPush = e.msg.includes('推送')
+        let isBlack = e.msg.includes('黑名单')
         let isGroup = e.msg.includes('群') || isPush
+        if (isBlack && (!isCoin || isGroup || isPush)) return e.reply('QQ黑名单仅支持米币签到，请使用“米币签到黑名单QQ”')
 
         let key
         if (isPush)
             key = isCoin ? 'bbsPush' : 'signPush'
+        else if (isBlack)
+            key = 'bbsQQBlack'
         else
             key = isCoin ? 'bbsQQ' : 'QQ'
 
@@ -90,7 +95,7 @@ export class config extends plugin {
 
         let action = e.msg.includes('添加') ? '添加' : e.msg.includes('删除') ? '删除' : '查看'
         let id = e.msg
-            .replace(/^#?(米币)?签到(添加|删除)?(白名单|推送)(QQ|群)?\s*/i, '')
+            .replace(/^#?(米币)?签到(添加|删除)?(白名单|黑名单|推送)(QQ|群)?\s*/i, '')
             .trim()
 
         if (!id) {
@@ -108,25 +113,25 @@ export class config extends plugin {
         if (action === '查看') {
             let msg = white[key].length
                 ? white[key].map((v, i) => `${i + 1}. ${v}`).join(', ')
-                : '暂无白名单'
+                : (isBlack ? '米币签到黑名单为空' : '暂无白名单')
             return e.reply(msg, false)
         }
 
         if (action === '添加') {
             if (white[key].some(v => String(v) === String(id)))
-                return e.reply(`${isGroup ? '群' : 'QQ'}:${id}已在${isPush ? '推送' : '白'}名单中`)
+                return e.reply(isBlack ? `QQ:${id}已在米币签到黑名单中` : `${isGroup ? '群' : 'QQ'}:${id}已在${isPush ? '推送' : '白'}名单中`)
             white[key].push(id)
             Cfg.setConfig('white', white)
-            return e.reply(`已添加${isPush ? '推送' : '白'}名单${isGroup ? '群' : 'QQ'}:${id}`)
+            return e.reply(isBlack ? `已添加米币签到黑名单QQ:${id}` : `已添加${isPush ? '推送' : '白'}名单${isGroup ? '群' : 'QQ'}:${id}`)
         }
 
         let index = white[key].findIndex(v => String(v) === String(id))
         if (index === -1)
-            return e.reply(`${isGroup ? '群' : 'QQ'}:${id}未在${isPush ? '推送' : '白'}名单中`)
+            return e.reply(isBlack ? `QQ:${id}不在米币签到黑名单中` : `${isGroup ? '群' : 'QQ'}:${id}未在${isPush ? '推送' : '白'}名单中`)
 
         white[key].splice(index, 1)
         Cfg.setConfig('white', white)
-        return e.reply(`已删除${isPush ? '推送' : '白'}名单${isGroup ? '群' : 'QQ'}:${id}`)
+        return e.reply(isBlack ? `已删除米币签到黑名单QQ:${id}` : `已删除${isPush ? '推送' : '白'}名单${isGroup ? '群' : 'QQ'}:${id}`)
     }
 
     async banUid(e) {

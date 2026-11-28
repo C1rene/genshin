@@ -1,4 +1,5 @@
 import { Data } from '#miao'
+import crypto from 'node:crypto'
 
 const games = [
   { key: 'bh2', name: '崩坏学园2' },
@@ -49,11 +50,7 @@ const MysUtil = {
 
   // 生成设备guid
   getDeviceGuid () {
-    function S4 () {
-      return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
-    }
-
-    return (S4() + S4() + '-' + S4() + '-' + S4() + '-' + S4() + '-' + S4() + S4() + S4())
+    return crypto.randomUUID().toLowerCase()
   },
 
   // 循环game

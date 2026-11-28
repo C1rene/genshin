@@ -59,10 +59,6 @@ Autodelck: true
 #是否自动删除sk
 Autodelsk: true
 
-#是否开启米游社更新面板
-myspanel: false
-#米游社更新面板CD，单位秒，建议不低于120秒
-myspanelCD: 120
 
 #是否开启星铁深渊
 challenge: true

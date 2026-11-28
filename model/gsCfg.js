@@ -277,7 +277,6 @@ class GsCfg {
     this.sr_nameID = new Map()
     let nameArr = this.getdefSet('role', 'name')
     let sr_nameArr = this.getdefSet('role', 'sr_name')
-    let nameArrUser = this.getConfig('role', 'name')
 
     let nameID = {}
 
@@ -295,11 +294,6 @@ class GsCfg {
       }
     }
 
-    for (let i in nameArrUser) {
-      for (let abbr of nameArrUser[i]) {
-        this.nameID.set(String(abbr), nameID[i])
-      }
-    }
   }
 
 

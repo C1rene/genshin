@@ -462,9 +462,7 @@ export default class MysInfo {
         break
       case 5003:
       case 10041:
-        if (!isTask) this.e.reply([`UID:${this.uid}，米游社账号异常，暂时无法查询，发送“${gametype}}绑定设备帮助”查看如何绑定设备`, segment.button([
-          { text: `${gametype}绑定设备帮助`, callback: `${gametype}绑定设备帮助` }
-        ])])
+        if (!isTask) this.e.reply(`UID:${this.uid}，米游社账号异常，暂时无法查询。设备信息由插件自动管理，请稍后重试或尝试刷新 Cookie。`)
         break
       case 1034:
       case 10035:
@@ -533,8 +531,10 @@ export default class MysInfo {
       let headers = { 'x-rpc-device_fp': deviceFp, 'x-rpc-challenge_game': challenge_game }
       let app_key = mysApi.game == 'zzz' ? 'game_record_zzz' : mysApi.game == 'sr' ? 'hkrpg_game_record' : ''
 
-      const verificationUser = VerificationStats.context(this.e, this.userId)
-      VerificationStats.addTriggered(verificationUser)
+      const verificationUser = VerificationStats.context(this.e, this.userId, {
+        cookie: mysApi.cookie, ltuid: MysApi.getLtuid(mysApi.cookie)
+      })
+      await VerificationStats.addTriggered(verificationUser)
       res = await vali.getData(retcode == 10035 ? "createGeetest" : "createVerification", { headers, app_key })
       if (!res) return { "data": null, "message": "ck失效", "retcode": 10103 }
 
@@ -584,7 +584,7 @@ export default class MysInfo {
       }
 
       if (res?.data?.challenge) {
-        VerificationStats.addPassed(verificationUser)
+        await VerificationStats.addPassed(verificationUser)
         res = await mysApi.getData(type, {
           headers: {
             "x-rpc-challenge": res?.data?.challenge,

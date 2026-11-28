@@ -56,8 +56,8 @@ export default class Handler {
       let headers = { 'x-rpc-device_fp': deviceFp, 'x-rpc-challenge_game': challenge_game }
       let app_key = game == 'zzz' ? 'game_record_zzz' : game == 'sr' ? 'hkrpg_game_record' : ''
 
-      const verificationUser = VerificationStats.context(e)
-      VerificationStats.addTriggered(verificationUser)
+      const verificationUser = VerificationStats.context(e, e?.user_id, { cookie, ltuid: MysApi.getLtuid(cookie) })
+      await VerificationStats.addTriggered(verificationUser)
       res = await vali.getData(retcode === 10035 ? 'createGeetest' : 'createVerification', { headers, app_key })
       if (!res || res?.retcode !== 0) {
         return { data: null, message: '未知错误，可能为cookie失效', retcode: 10103 }
@@ -123,7 +123,7 @@ export default class Handler {
       }
 
       if (res?.data?.challenge) {
-        VerificationStats.addPassed(verificationUser)
+        await VerificationStats.addPassed(verificationUser)
         return res
       }
     } catch (error) {

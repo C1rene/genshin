@@ -7,6 +7,25 @@ import moment from 'moment'
 import Cfg from './Cfg.js'
 import _ from 'lodash'
 import { Character } from '#miao.models'
+import { resolveBoundGroup } from './SignTaskNotice.js'
+import { sendWithTimeout } from './PushSend.js'
+
+let noteTaskRunning = false
+const noteSendInFlight = new Set()
+
+function getRecoveryTime(value, now = new Date()) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds <= 0) return
+  const date = new Date(now.getTime() + seconds * 1000)
+  if (!Number.isFinite(date.getTime())) return
+
+  // 比较本地日历日期，不用经过的小时数判定今天、明天或后天。
+  const dayStart = d => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+  const daysAhead = (dayStart(date) - dayStart(now)) / 86400000
+  const sameYear = date.getFullYear() === now.getFullYear()
+  const dateLabel = moment(date).format(sameYear ? 'M月D日' : 'YYYY年M月D日')
+  return { seconds, date, daysAhead, dateLabel, clock: moment(date).format('HH:mm') }
+}
 
 export default class Note extends base {
   constructor(e) {
@@ -65,83 +84,128 @@ export default class Note extends base {
   }
 
   async NoteTask() {
-    if (!this.set.NoteTask) return
+    if (!this.set.NoteTask || noteTaskRunning) return
+    noteTaskRunning = true
+    try {
+      await this.runNoteTask()
+    } finally {
+      noteTaskRunning = false
+    }
+  }
 
-    let sendCD = this.set.sendCD * 3600;
-    let Note = Cfg.getConfig('defnote')
-    if (_.isEmpty(Note)) return
+  async runNoteTask() {
+    const sendCD = this.set.sendCD * 3600
+    const subscriptions = Cfg.getConfig('defnote')
+    for (const [botId, users] of Object.entries(subscriptions ?? {})) {
+      for (const [userId, groups] of Object.entries(users ?? {})) {
+        const numericId = Number(userId)
+        const user = Number.isSafeInteger(numericId) && String(numericId) === userId ? numericId : userId
+        logger.mark(`[定时任务:检查体力推送]Bot:${botId};User:${userId}`)
+        const images = new Map()
+        let cks
 
-    for (let bot_id in Note)
-      for (let user_id in Note[bot_id]) {
-        logger.mark(`[定时任务:检查体力推送]Bot:${bot_id};User:${user_id}`)
-        let User = Note[bot_id][user_id]
-        user_id = Number(user_id) || user_id
-        let { cks } = await Cfg.getcks(false, user_id, true)
-        let imgs = {}, Resins = {}
-        for (let group_id in User) {
-          let Group = User[group_id]
+        for (const [groupId, group] of Object.entries(groups ?? {})) {
+          const label = `[体力推送]Bot:${botId};Group:${groupId};User:${userId}`
+          let attempted = false
+          const inFlightKey = `${botId}:${groupId}:${userId}`
+          const notices = []
           this.e = {
-            user_id: user_id,
-            qq: user_id,
-            msg: "体力",
+            user_id: user,
+            qq: user,
+            msg: '体力',
             isSr: false,
-            isZzz: false
+            isZzz: false,
+            reply: async msg => { notices.push(msg); return true }
           }
-          let sendMsg = [segment.at(user_id), this.set.TaskMsg]
-          let length = sendMsg.length
-          this.e.reply = (msg) => { sendMsg.push(msg) }
-
-          for (let g of ['gs', 'sr', 'zzz']) {
-            this.e.isSr = g == 'sr' ?? true
-            this.e.isZzz = g == 'zzz' ?? true
-            for (let uid of Group[g]) {
-              let data = {}, Resin = Group[`${g}_Resin`]
-              let sendkey = `${group_id}:${bot_id}:${g}_NoteTask:${uid}`
-              if (await redis.get(sendkey)) continue
-
-              if (imgs[`${g}_${uid}`]) {
-                if (Number(Resins[`${g}_${uid}`]) < Number(Resin)) continue
-                logger.mark(`[体力推送]Bot:${bot_id};Group:${group_id};QQ:${user_id};${`${g}_UID`}:${uid}`)
-
-                await redis.set(sendkey, "1", { EX: sendCD })
-                await this.e.reply(imgs[`${g}_${uid}`])
-                continue
-              }
-
-              if (!cks[g][uid]) continue
-              let ck = cks[g][uid]
-
-              let { Data, Sign } = await this.noteData(ck, g)
-              if (Data?.retcode !== 0 || _.isEmpty(Sign)) continue
-
-              Resins[`${g}_${uid}`] = this.e.isZzz ? Data?.data.energy.progress.current : Data?.data[`current_${this.e.isSr ? 'stamina' : 'resin'}`]
-              if (Number(Resins[`${g}_${uid}`]) >= Number(Resin)) {
-                logger.mark(`[体力推送]Bot:${bot_id};Group:${group_id};QQ:${user_id};${`${g}_UID`}:${uid}`)
-
-                data = this.e.isZzz ? await this.noteZzz(Data, uid) : this.e.isSr ? await this.noteSr(Data, uid) : await this.notegs(Data, uid)
-                data = {
-                  quality: 80,
-                  ...this.screenNote,
-                  ...data,
-                  ...Sign
-                }
-                imgs[`${g}_${uid}`] = await puppeteer.screenshot(`${data.gstempFile}dailyNote`, data)
-              }
-
-              if (imgs[`${g}_${uid}`]) {
-                await redis.set(sendkey, "1", { EX: sendCD })
-                await this.e.reply(imgs[`${g}_${uid}`])
-              }
+          try {
+            if (noteSendInFlight.has(inFlightKey)) {
+              logger.warn(`${label} 上一次发送仍未结束，跳过本轮以避免重复推送`)
+              continue
             }
-          }
-          if (sendMsg.length > length) {
-            Bot[bot_id].pickGroup(group_id).sendMsg(sendMsg)
-            await common.sleep(5000)
+            if (!resolveBoundGroup(botId, groupId)) {
+              logger.warn(`${label} 订阅机器人或群不可用，已跳过`)
+              continue
+            }
+
+            cks ??= (await Cfg.getcks(false, user, true)).cks
+            const entries = await this.collectNoteReminders(cks, images, botId, user, groupId, group)
+            if (!entries.length && notices.length === 0) continue
+
+            // 查询和出图期间可能已掉线或重连，发送前重新解析原账号和群。
+            const route = resolveBoundGroup(botId, groupId)
+            if (!route) throw new Error('订阅机器人或群不可用，已跳过')
+
+            attempted = true
+            const message = [segment.at(user), this.set.TaskMsg, ...notices, ...entries.map(entry => entry.image)]
+            const contact = route.account.pickGroup(route.key)
+            const pendingSend = Promise.resolve().then(() => contact.sendMsg(message))
+            noteSendInFlight.add(inFlightKey)
+            pendingSend.finally(() => noteSendInFlight.delete(inFlightKey)).catch(() => {})
+            const result = await sendWithTimeout(() => pendingSend)
+            // 不强制要求 message_id：当前适配器的 sendMsg 回执格式尚未在真实 Bot 环境确认。
+            if (result === false || result === null) throw new Error('适配器明确返回发送失败')
+
+            // 只有发送 Promise 正常完成后才写入冷却，避免失败发送被误记为已推送。
+            for (const { key } of entries)
+              await redis.set(key, '1', { EX: sendCD })
+
+            logger.mark(`${label} 已发送 ${entries.length} 条体力提醒${notices.length ? `，附带 ${notices.length} 条验证提示` : ''}`)
+          } catch (error) {
+            logger.warn(`${label} ${error?.message ?? error}`)
+          } finally {
+            if (attempted) await common.sleep(5000)
           }
         }
       }
+    }
+  }
 
-    return
+  async collectNoteReminders(cks, images, botId, user, groupId, group) {
+    const entries = new Map()
+
+    for (const game of ['gs', 'sr', 'zzz']) {
+      this.e.isSr = game === 'sr'
+      this.e.isZzz = game === 'zzz'
+
+      for (const uid of group?.[game] ?? []) {
+        const key = `${groupId}:${botId}:${game}_NoteTask:${uid}`
+        if (entries.has(key) || await redis.get(key)) continue
+
+        const threshold = Number(group[`${game}_Resin`])
+        const cacheKey = `${game}_${uid}`
+        let info = images.get(cacheKey)
+
+        if (!info) {
+          const ck = cks?.[game]?.[uid]
+          if (!ck) continue
+
+          const { Data, Sign } = await this.noteData(ck, game) || {}
+          if (Data?.retcode !== 0 || _.isEmpty(Sign)) continue
+
+          const resin = this.e.isZzz
+            ? Data.data?.energy?.progress?.current
+            : Data.data?.[this.e.isSr ? 'current_stamina' : 'current_resin']
+          if (!(Number(resin) >= threshold)) continue
+
+          const detail = this.e.isZzz
+            ? await this.noteZzz(Data, uid)
+            : this.e.isSr
+              ? await this.noteSr(Data, uid)
+              : await this.notegs(Data, uid)
+
+          const data = { quality: 80, ...this.screenNote, ...detail, ...Sign }
+          const image = await this.screenshotDailyNote(data)
+          if (!image) continue
+
+          info = { resin: Number(resin), image }
+          images.set(cacheKey, info)
+        }
+
+        if (info.resin >= threshold) entries.set(key, info.image)
+      }
+    }
+
+    return Array.from(entries, ([key, image]) => ({ key, image }))
   }
 
   async getData(ck, game) {
@@ -163,8 +227,16 @@ export default class Note extends base {
       ...data,
       ...res.Sign
     }
-    let img = await puppeteer.screenshot(`${data.gstempFile}dailyNote`, data)
+    let img = await this.screenshotDailyNote(data)
     if (img) return await this.e.reply(img)
+  }
+
+  screenshotDailyNote(data) {
+    return puppeteer.screenshot(`${data.gstempFile}dailyNote`, {
+      ...data,
+      imgType: 'png',
+      omitBackground: true
+    })
   }
 
   async noteData(ck, game) {
@@ -191,24 +263,7 @@ export default class Note extends base {
     let { data } = res
     const ImgData = {}
 
-    const nowDay = moment(new Date()).format('DD')
-    if (data.energy.restore > 0) {
-      let resinMaxTime = new Date().getTime() + data.energy.restore * 1000
-      let maxDate = new Date(resinMaxTime)
-
-      resinMaxTime = moment(maxDate).format('HH:mm')
-      let timeDay = await this.dateTime_(maxDate)
-      ImgData.resinMaxTimeMb2 = timeDay + moment(maxDate).format('hh:mm')
-
-      if (moment(maxDate).format('DD') !== nowDay) {
-        ImgData.resinMaxTimeMb2Day = '明天'
-        resinMaxTime = `明天 ${resinMaxTime}`
-      } else {
-        ImgData.resinMaxTimeMb2Day = '今天'
-        resinMaxTime = ` ${resinMaxTime}`
-      }
-      ImgData.resinMaxTime = resinMaxTime
-    }
+    Object.assign(ImgData, await this.resinRecoveryFields(data.energy.restore))
     ImgData.sale_state = /Doing/.test(data.vhs_sale.sale_state) ? '正在营业' : '未营业'
     ImgData.card = /Done/.test(data.card_sign) ? '已完成' : '未完成'
 
@@ -226,37 +281,21 @@ export default class Note extends base {
 
     /** 树脂 */
     let resinMaxTime
-    if (data.stamina_recover_time > 0) {
-      let d = moment.duration(data.stamina_recover_time, 'seconds')
-      let day = Math.floor(d.asDays())
-      let hours = d.hours()
-      let minutes = d.minutes()
-      let seconds = d.seconds()
-      resinMaxTime = hours + '小时' + minutes + '分钟' + seconds + '秒'
-      //精确到秒。。。。
-      if (day > 0) {
-        resinMaxTime = day + '天' + hours + '小时' + minutes + '分钟' + seconds + '秒'
-      } else if (hours > 0) {
-        resinMaxTime = hours + '小时' + minutes + '分钟' + seconds + '秒'
-      } else if (minutes > 0) {
-        resinMaxTime = minutes + '分钟' + seconds + '秒'
-      } else if (seconds > 0) {
-        resinMaxTime = seconds + '秒'
-      }
-      if ((day > 0) || (hours > 0) || (seconds > 0)) {
-        let total_seconds = 3600 * hours + 60 * minutes + seconds
-        const now = new Date()
-        const dateTimes = now.getTime() + total_seconds * 1000
-        const date = new Date(dateTimes)
-        const dayDiff = date.getDate() - now.getDate()
-        const str = dayDiff === 0 ? '今日' : '明日'
-        const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date
-          .getMinutes()
-          .toString()
-          .padStart(2, '0')}`
-        let recoverTimeStr = ` | [${str}]${timeStr}`
-        resinMaxTime += recoverTimeStr
-      }
+    const recovery = getRecoveryTime(data.stamina_recover_time)
+    if (recovery) {
+      const total = Math.ceil(recovery.seconds)
+      const day = Math.floor(total / 86400)
+      const hours = Math.floor(total / 3600) % 24
+      const minutes = Math.floor(total / 60) % 60
+      const seconds = total % 60
+      const countdownParts = []
+      if (day) countdownParts.push(`${day}天`)
+      if (hours) countdownParts.push(`${hours}小时`)
+      if (minutes) countdownParts.push(`${minutes}分钟`)
+      if (seconds || countdownParts.length === 0) countdownParts.push(`${seconds}秒`)
+      const countdown = countdownParts.join('')
+      const label = ['今日', '明日', '后日'][recovery.daysAhead] ?? recovery.dateLabel
+      resinMaxTime = `${countdown} | [${label}]${recovery.clock}`
     }
     data.bfStamina = data.current_stamina / data.max_stamina * 100 + '%'
     // 头像
@@ -289,23 +328,9 @@ export default class Note extends base {
     let { data } = res
 
     /** 树脂 */
-    let nowDay = moment(new Date()).format('DD')
-    let resinMaxTime, resinMaxTimeMb2, resinMaxTimeMb2Day
-    if (data.resin_recovery_time > 0) {
-      resinMaxTime = new Date().getTime() + data.resin_recovery_time * 1000
-      let maxDate = new Date(resinMaxTime)
-      resinMaxTime = moment(maxDate).format('HH:mm')
-      let timeDay = await this.dateTime_(maxDate)
-      resinMaxTimeMb2 = timeDay + moment(maxDate).format('hh:mm')
-
-      if (moment(maxDate).format('DD') !== nowDay) {
-        resinMaxTimeMb2Day = '明天'
-        resinMaxTime = `明天 ${resinMaxTime}`
-      } else {
-        resinMaxTimeMb2Day = '今天'
-        resinMaxTime = ` ${resinMaxTime}`
-      }
-    }
+    let nowDay = moment().format('YYYY-MM-DD')
+    const { resinMaxTime, resinMaxTimeMb2, resinMaxTimeMb2Day } =
+      await this.resinRecoveryFields(data.resin_recovery_time)
 
     /** 派遣 */
     let remainedTime = ''
@@ -324,7 +349,7 @@ export default class Note extends base {
             let remainedDate = moment.unix(remainedTime)
             remainedTime = remainedDate.format("HH:mm")
 
-            if (remainedDate.date() != nowDay) {
+            if (remainedDate.format('YYYY-MM-DD') !== nowDay) {
               remainedTime = `明天 ${remainedTime}`
             } else {
               remainedTime = `今天 ${remainedTime}`
@@ -355,7 +380,7 @@ export default class Note extends base {
         coinTimeMb2 = timeDay + moment(coinDate).format('hh:mm')
       } else {
         coinTimeMb2 = moment(coinDate).format('hh:mm')
-        if (moment(coinDate).format('DD') !== nowDay) {
+        if (moment(coinDate).format('YYYY-MM-DD') !== nowDay) {
           coinTimeMb2Day = '明天'
           coinTime = `明天 ${moment(coinDate).format('hh:mm')}`
         } else {
@@ -378,6 +403,20 @@ export default class Note extends base {
       dayMb2: moment(new Date()).format('yyyy年MM月DD日 HH:mm') + ' ' + this.week[new Date().getDay()],
       day: moment().format('MM-DD HH:mm') + ' ' + this.week[moment().day()],
       ...data
+    }
+  }
+
+  async resinRecoveryFields(value) {
+    const recovery = getRecoveryTime(value)
+    if (!recovery) return {}
+
+    const { date, daysAhead, dateLabel, clock } = recovery
+    const label = ['今天', '明天', '后天'][daysAhead] ?? dateLabel
+    const timeDay = await this.dateTime_(date)
+    return {
+      resinMaxTime: `${label} ${clock}`,
+      resinMaxTimeMb2: timeDay + moment(date).format('hh:mm'),
+      resinMaxTimeMb2Day: label
     }
   }
 

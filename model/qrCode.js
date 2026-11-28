@@ -9,7 +9,7 @@ export default class qrCode extends base {
         this.model = 'qrCode'
     }
 
-    bindStoken(e, list, info) {
+    async bindStoken(e, list, info) {
         let datalist = {}
         const role = list[0] || {}
         const serverType = resolveServerType([{
@@ -31,7 +31,7 @@ export default class qrCode extends base {
             region_name: role.region_name,
             region: role.region
         }
-        Cfg.saveSk(e.user_id, datalist)
+        await Cfg.saveSk(e.user_id, datalist)
         let msg = 'stoken绑定成功您可通过下列指令进行操作:'
         msg += '\n【#米币查询】查询米游币余额'
         msg += '\n【#mys原神签到】获取米游币'

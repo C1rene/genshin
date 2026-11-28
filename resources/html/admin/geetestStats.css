@@ -1,0 +1,169 @@
+.geetest-stats.container {
+  width: 800px;
+  max-width: 800px;
+}
+
+.geetest-stats .page {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.geetest-stats .header,
+.geetest-stats .stats-section,
+.geetest-stats .table-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.geetest-stats .header-content {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.geetest-stats .stats-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: stretch;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.geetest-stats .summary-card {
+  min-width: 0;
+  width: 100%;
+}
+
+.geetest-stats .stats-date {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #f0f6fb;
+}
+
+.geetest-stats .stats-legend {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #536273;
+}
+
+.geetest-stats .stats-section {
+  margin-bottom: 24px;
+}
+
+.geetest-stats .section-name {
+  background: linear-gradient(135deg, #a8954d 0%, #d4c47a 100%);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 1.45;
+  margin-bottom: 10px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.geetest-stats .section-name small {
+  display: block;
+  margin-top: 4px;
+  margin-left: 0;
+  font-size: 11px;
+  font-weight: normal;
+  white-space: normal;
+}
+
+.geetest-stats .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  list-style: none;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.geetest-stats .stats-account {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid #dce5eb;
+  border-radius: 6px;
+  background: #f8fafc;
+  overflow: hidden;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.geetest-stats .stats-account-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(28px, max-content) minmax(28px, max-content);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.geetest-stats .stats-account-main span {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 7px 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.geetest-stats .stats-ltuid {
+  color: #273b4d;
+  font-size: 11px !important;
+}
+
+.geetest-stats .stats-account-periods {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 5px 4px;
+  border-top: 1px solid #e5ebf0;
+  color: #596777;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.geetest-stats .stats-account-periods span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.geetest-stats .stats-account-periods b {
+  font-weight: 700;
+}
+
+.geetest-stats .stats-success { color: #176137; }
+.geetest-stats .stats-fail { color: #a22936; }
+.geetest-stats .stats-account-main .stats-success { background: #e4f4e9; }
+.geetest-stats .stats-account-main .stats-fail { background: #fae8eb; }
+
+.geetest-stats .table-container {
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.geetest-stats .stats-empty,
+.geetest-stats .stats-next {
+  padding: 14px;
+  text-align: center;
+  background: #f8f9fa;
+}
+
+.geetest-stats .stats-pending-note {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

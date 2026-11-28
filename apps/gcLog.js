@@ -1,7 +1,6 @@
 import plugin from "../../../lib/plugins/plugin.js"
 import fs from "node:fs"
 import GachaLog from "../model/gachaLog.js"
-import LogCount from "../model/logCount.js"
 import ExportLog from "../model/exportLog.js"
 
 const _path = process.cwd() + "/plugins/genshin"
@@ -10,7 +9,7 @@ export class gcLog extends plugin {
   constructor() {
     super({
       name: "抽卡记录",
-      dsc: "抽卡记录数据统计",
+      dsc: "抽卡记录采集、更新、导入与导出",
       event: "message",
       priority: 300,
       rule: [
@@ -21,10 +20,6 @@ export class gcLog extends plugin {
         {
           reg: "^#?(原神|星铁)?(强制)?导入记录(json)?$",
           fnc: "logJson"
-        },
-        {
-          reg: "^#?(原神|星铁)?(全部)?(抽卡|抽奖|角色|角色联动|武器|武器联动|集录|常驻|up|新手|光锥|光锥联动|全部)池*(记录|祈愿|分析)$",
-          fnc: "getLog"
         },
         {
           reg: "^#?(原神|星铁)?(强制)?导出记录(json)?(v2|v4)?$",
@@ -39,41 +34,11 @@ export class gcLog extends plugin {
           fnc: "helpPort"
         },
         {
-          reg: "^#?(原神|星铁)?(抽卡|抽奖|角色|武器|集录|常驻|up|新手|光锥)池*统计$",
-          fnc: "logCount"
-        },
-        {
           // #设置全量更新抽卡记录
           reg: "^#?设置全量(更新|获取)(抽卡|祈愿)记录\s*(开|关|on|off)?$",
           fnc: "setFetchFullLog"
         },
       ]
-    })
-
-    this.androidUrl = "https://docs.qq.com/doc/DUWpYaXlvSklmVXlX"
-    Object.defineProperty(this, "button", {
-      get() {
-        this.prefix = this.e?.isSr ? "*" : "#"
-        return segment.button([
-          { text: "角色记录", callback: `${this.prefix}角色记录` },
-          { text: "角色统计", callback: `${this.prefix}角色统计` },
-        ], [
-          { text: "武器记录", callback: `${this.prefix}武器记录` },
-          { text: "武器统计", callback: `${this.prefix}武器统计` },
-        ], [
-          { text: "角色联动记录", callback: `${this.prefix}角色联动记录` },
-          { text: "角色联动统计", callback: `${this.prefix}角色联动统计` },
-        ], [
-          { text: "武器联动记录", callback: `${this.prefix}武器联动记录` },
-          { text: "武器联动统计", callback: `${this.prefix}武器联动统计` },
-        ], [
-          { text: "集录记录", callback: `${this.prefix}集录记录` },
-          { text: "集录统计", callback: `${this.prefix}集录统计` },
-        ], [
-          { text: "常驻记录", callback: `${this.prefix}常驻记录` },
-          { text: "常驻统计", callback: `${this.prefix}常驻统计` },
-        ])
-      }
     })
   }
 
@@ -86,34 +51,14 @@ export class gcLog extends plugin {
     }
   }
 
-  accept() {
-    if (this.e.msg && /^#?(角色|武器)统计$/g.test(this.e.msg)) {
-      this.e.msg = this.e.msg.replace("统计", "池统计")
-      return true
-    }
-  }
-
   /** 抽卡记录链接 */
   async logUrl() {
-    let data = await new GachaLog(this.e).logUrl()
-    if (!data) return
-
-    await this.renderImg("genshin", `html/gacha/gacha-log`, data)
+    const updated = await new GachaLog(this.e).logUrl()
+    if (!updated) return false
 
     if (this.e.isGroup)
-      this.e.reply("已收到链接，请撤回", false, { at: true })
-  }
-
-  /** #抽卡记录 */
-  async getLog() {
-    this.e.isAll = !!(this.e.msg.includes("全部"))
-    let data = await new GachaLog(this.e).getLogData()
-    if (!data) return
-    let name = `html/gacha/gacha-log`
-    if (this.e.isAll) {
-      name = `html/gacha/gacha-all-log`
-    }
-    this.reply([await this.renderImg("genshin", name, data, { retType: "base64" }), this.button])
+      await this.e.reply("已收到链接，请撤回", false, { at: true })
+    return true
   }
 
   /** 导出记录 */
@@ -149,30 +94,11 @@ export class gcLog extends plugin {
   }
 
   help() {
-    this.e.reply([segment.image(`file://${_path}/resources/logHelp/记录帮助.png`), segment.button([
-      { text: "电脑", callback: "#电脑帮助" },
-      { text: "安卓", callback: "#安卓帮助" },
-      { text: "苹果", callback: "#苹果帮助" },
-    ])])
+    this.e.reply("先发「#扫码登录」，使用米游社或扫码器扫描二维码登录后，再发「#更新抽卡记录」或「wx更新抽卡记录」或「%更新抽卡记录」获取原神/星铁/zzz抽卡记录。\n支持发送抽卡链接导入记录，支持发送json文件导入历史记录。")
   }
 
   helpPort() {
-    let msg = this.e.msg.replace(/#|帮助/g, "")
-
-    if (["电脑", "pc"].includes(msg)) {
-      this.e.reply(segment.image(`file://${_path}/resources/logHelp/记录帮助-电脑.png`))
-    } else if (["安卓"].includes(msg)) {
-      this.e.reply(`安卓抽卡记录获取教程：${this.androidUrl}`)
-    } else if (["苹果", "ios"].includes(msg)) {
-      this.e.reply(segment.image(`file://${_path}/resources/logHelp/记录帮助-苹果.png`))
-    }
-  }
-
-  async logCount() {
-    let data = await new LogCount(this.e).count()
-    if (!data) return
-
-    this.reply([await this.renderImg("genshin", `html/gacha/log-count`, data, { retType: "base64" }), this.button])
+    this.help()
   }
 
   async setFetchFullLog() {

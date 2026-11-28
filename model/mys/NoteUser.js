@@ -10,6 +10,7 @@ import lodash from 'lodash'
 import MysUser from './MysUser.js'
 import MysUtil from './MysUtil.js'
 import { UserDB } from '../db/index.js'
+import VerificationStats from '../VerificationStats.js'
 import { Data } from '#miao'
 
 export default class NoteUser extends BaseModel {
@@ -322,7 +323,9 @@ export default class NoteUser extends BaseModel {
         this.setMainUid(uid, game, false)
       }
     })
-    this.save()
+    await this.save()
+    // 重新绑定任意来源的同一 ltuid 时，解绑快照失效；原始 ltuid 记录仍是唯一数据源。
+    await VerificationStats.onQQBind(this.qq, mysUser.ltuid)
   }
 
   // 删除当前用户绑定CK
@@ -332,15 +335,33 @@ export default class NoteUser extends BaseModel {
   }
 
   async delMysUser (mysUser = '') {
-    let ltuid = mysUser.ltuid || mysUser
-    if (ltuid && this.mysUsers[ltuid]) {
-      let mys = this.mysUsers[ltuid]
-      this.mysUsers[ltuid] = false
-      this._map = false
-      await mys.del()
-    }
+    let ltuid = String(mysUser?.ltuid || mysUser || '')
+    if (!ltuid || !this.mysUsers[ltuid]) return false
+
+    const mys = this.mysUsers[ltuid]
+    this.mysUsers[ltuid] = false
     this._map = false
+    // 先更新当前 QQ 的绑定表，再判断是否还有其他 QQ 使用同一 CK。
     await this.save()
+
+    let otherCkBound = false
+    try {
+      const rows = await UserDB.findAll()
+      otherCkBound = (rows || []).some(row => {
+        if (String(row?.id) === String(this.db?.id ?? this.qq)) return false
+        if (row?.type && row.type !== 'qq') return false
+        return String(row?.ltuids || '').split(',').map(value => value.trim()).includes(ltuid)
+      })
+    } catch (error) {
+      // 无法确认共享关系时宁可保留 CK 数据，也不误删其他 QQ 正在使用的账号。
+      logger.error(`[MysUser][ltuid:${ltuid}] 检查共享绑定失败，保留 CK 数据：${error}`)
+      otherCkBound = true
+    }
+
+    // 只有 CK 与 SK 等所有 QQ 关联都消失时才创建解绑快照。
+    await VerificationStats.onQQUnbind(this.qq, ltuid)
+    if (!otherCkBound) await mys.del()
+    return true
   }
 
   async eachMysUser (fn) {
@@ -378,9 +399,7 @@ export default class NoteUser extends BaseModel {
           // status为1时无法查询天赋，但仍可查询角色，保留CK
           await mysUser.initCache()
         } else if (status === 2) {
-          // status为2时无法查询角色，删除ck cache
-          // 因仍能查询体力，故保留ck记录不直接删除
-          await mysUser.del()
+          // status为2时仍能查询体力，保留 CK 数据及所有 QQ 绑定，不删除共享账号记录。
         } else if (status === 3) {
           // status为3时CK完全失效，用户删除此CK
           await this.delCk(ltuid)

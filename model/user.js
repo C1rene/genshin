@@ -115,9 +115,27 @@ export default class User extends base {
 
     logger.mark(`${this.e.logFnc} 检查Cookie正常 [ltuid:${mys.ltuid}]`)
 
+    await mys.save()
     await user.addMysUser(mys)
     await mys.initCache()
     await user.save()
+
+    // 所有非 Passport 临时会话的 CK 绑定，都在保存成功后交由 Genshin DeviceManager 归档/补齐设备档案。
+    // Xiaoyao Passport 登录带有 deviceSessionId，必须保留临时档案，待登录流程完成后整体提升。
+    if (!this.e.deviceSessionId) {
+      try {
+        const { default: DeviceManager } = await import('./device/DeviceManager.js')
+        const isOs = mys.type === 'hoyolab'
+        const roleUid = mys.uids?.gs?.[0] || mys.uids?.sr?.[0] || mys.uids?.zzz?.[0] || ltuidV2
+        await DeviceManager.getForAccount(String(ltuidV2), data.ck, {
+          game: 'bbs', uid: roleUid,
+          server: isOs ? 'os_usa' : 'cn_gf01',
+          biz: isOs ? 'hk4e_global' : 'hk4e_cn', isOs
+        })
+      } catch (error) {
+        logger.warn(`[DeviceManager][ltuid:${ltuidV2}] CK 已保存，但设备档案初始化失败：${error.message}`)
+      }
+    }
 
     logger.mark(`${this.e.logFnc} 保存Cookie成功 [ltuid:${mys.ltuid}]`)
 

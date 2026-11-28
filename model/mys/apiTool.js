@@ -22,13 +22,13 @@ export default class apiTool {
   }
 
   getUrlMap = (data = {}) => {
-    const productName = data?.productName || 'XQ-BC52_EEA'
-    const deviceType = data?.deviceType || 'XQ-BC52'
-    const modelName = data?.modelName || 'XQ-BC52'
-    const oaid = data?.oaid || this.uuid
-    const osVersion = data?.osVersion || '13'
-    const deviceInfo = data?.deviceInfo || 'Sony/XQ-BC52_EEA/XQ-BC52:13/61.2.A.0.472A/061002A0000472A0046651803:user/release-keys'
-    const board = data?.board || 'lahaina'
+    const productName = data?.productName || data?.deviceProfile?.deviceProduct || 'XQ-BC52_EEA'
+    const deviceType = data?.deviceType || data?.deviceProfile?.deviceName || 'XQ-BC52'
+    const modelName = data?.modelName || data?.deviceProfile?.deviceModel || 'XQ-BC52'
+    const oaid = data?.oaid || data?.deviceProfile?.oaid || this.uuid
+    const osVersion = data?.osVersion || data?.deviceProfile?.androidVersion || '13'
+    const deviceInfo = data?.deviceInfo || data?.deviceProfile?.deviceFingerprint || 'Sony/XQ-BC52_EEA/XQ-BC52:13/61.2.A.0.472A/061002A0000472A0046651803:user/release-keys'
+    const board = data?.board || data?.deviceProfile?.deviceBoard || 'lahaina'
     const deviceBrand = deviceInfo.split('/')[0]
     const deviceDisplay = deviceInfo.split('/')[3]
     let bbs_api = 'https://bbs-api.miyoushe.com/'
@@ -144,10 +144,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -155,10 +155,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         UserGame: {
@@ -203,12 +203,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -217,12 +217,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -270,12 +270,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -325,12 +325,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -434,10 +434,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -445,10 +445,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         AuthKey: {
@@ -504,12 +504,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -550,12 +550,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -646,10 +646,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -657,10 +657,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         }
       },
@@ -706,12 +706,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -752,12 +752,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -796,10 +796,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -807,10 +807,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         }
       },
@@ -839,12 +839,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -872,12 +872,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -887,10 +887,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -898,10 +898,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         }
       },
@@ -938,12 +938,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_cn',
-              bbs_device_id: `${this.uuid}`,
-              device_fp: '38d805c20d53d',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+              bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -971,12 +971,12 @@ export default class apiTool {
             url: `${hostPublicData}device-fp/api/getFp`,
             body: {
               app_name: 'bbs_oversea',
-              device_fp: '38d7f4c72b736',
-              device_id: 'cc57c40f763ae4cc',
-              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"737","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218355","appUpdateTimeDiff":1740498134990,"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-0.6436693x5.510072x8.106883","sdRemain":218227,"buildTags":"release-keys","packageName":"com.mihoyo.hoyolab","networkType":"WiFi","debugStatus":1,"ramCapacity":"224845","magnetometer":"-46.143753x52.350002x141.54376","display":"${deviceDisplay}","appInstallTimeDiff":1740498134990,"packageVersion":"2.44.0","gyroscope":"0.21242823x0.11484258x-0.09850194","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
-              hoyolab_device_id: `${this.uuid}`,
+              device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+              device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+              ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '737'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218355'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498134990},"deviceInfo":"${deviceInfo}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"app_set_id":"${data.appSetId || this.uuid}","chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","adid":"${data.adid || this.uuid}","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-0.6436693x5.510072x8.106883'}","sdRemain":${data.sdRemain || 218227},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hoyolab'}","networkType":"WiFi","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-46.143753x52.350002x141.54376'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498134990},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '0.21242823x0.11484258x-0.09850194'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
+              hoyolab_device_id: `${data.hoyolabDeviceId || data.bbsDeviceId || this.uuid}`,
               platform: '2',
-              seed_id: `${this.uuid}`,
+              seed_id: `${data.seedId || this.uuid}`,
               seed_time: new Date().getTime() + ''
             }
           }
@@ -991,10 +991,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -1002,10 +1002,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         }
       },
@@ -1037,12 +1037,12 @@ export default class apiTool {
           url: `${hostPublicData}device-fp/api/getFp`,
           body: {
             app_name: 'bbs_cn',
-            bbs_device_id: `${this.uuid}`,
-            device_fp: '38d805c20d53d',
-            device_id: 'cc57c40f763ae4cc',
-            ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"768","deviceName":"${modelName}","productName":"${productName}","romRemain":"727","hostname":"BuildHost","screenSize":"1096x2434","isTablet":0,"aaid":"${this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"qcom","deviceType":"${deviceType}","devId":"REL","serialNumber":"unknown","sdCapacity":224845,"buildTime":"1692775759000","buildUser":"BuildUser","simState":1,"ramRemain":"218344","appUpdateTimeDiff":1740498108042,"deviceInfo":"${deviceInfo}","vaid":"${this.uuid}","buildType":"user","sdkVersion":"33","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"-1.588236x6.8404818x6.999604","sdRemain":218214,"buildTags":"release-keys","packageName":"com.mihoyo.hyperion","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"224845","magnetometer":"-47.04375x51.3375x137.96251","display":"${deviceDisplay}","appInstallTimeDiff":1740498108042,"packageVersion":"2.44.0","gyroscope":"-0.22601996x-0.09453133x0.09040799","batteryStatus":88,"hasKeyboard":0,"board":"${board}"}`,
+            bbs_device_id: `${data.bbsDeviceId || this.uuid}`,
+            device_fp: data.seedFp || this.uuid.replace(/-/g, '').slice(0, 13),
+            device_id: data.fpDeviceId || this.uuid.replace(/-/g, '').slice(0, 16),
+            ext_fields: `{"proxyStatus":1,"isRoot":0,"romCapacity":"${data.romCapacity || '768'}","deviceName":"${modelName}","productName":"${productName}","romRemain":"${data.romRemain || '727'}","hostname":"BuildHost","screenSize":"${data.screenSize || '1096x2434'}","isTablet":0,"aaid":"${data.aaid || this.uuid}","model":"${modelName}","brand":"${deviceBrand}","hardware":"${data.hardware || 'qcom'}","deviceType":"${deviceType}","devId":"REL","serialNumber":"${data.serialNumber || 'unknown'}","sdCapacity":${data.sdCapacity || 224845},"buildTime":"${data.buildTime || '1692775759000'}","buildUser":"${data.buildUser || 'BuildUser'}","simState":1,"ramRemain":"${data.ramRemain || '218344'}","appUpdateTimeDiff":${data.appUpdateTimeDiff || 1740498108042},"deviceInfo":"${deviceInfo}","vaid":"${data.vaid || this.uuid}","buildType":"user","sdkVersion":"${data.sdkVersion || '33'}","ui_mode":"UI_MODE_TYPE_NORMAL","isMockLocation":0,"cpuType":"arm64-v8a","isAirMode":0,"ringMode":2,"chargeStatus":1,"manufacturer":"${deviceBrand}","emulatorStatus":0,"appMemory":"768","osVersion":"${osVersion}","vendor":"unknown","accelerometer":"${data.accelerometer || '-1.588236x6.8404818x6.999604'}","sdRemain":${data.sdRemain || 218214},"buildTags":"release-keys","packageName":"${data.packageName || 'com.mihoyo.hyperion'}","networkType":"WiFi","oaid":"${oaid}","debugStatus":1,"ramCapacity":"${data.ramCapacity || '224845'}","magnetometer":"${data.magnetometer || '-47.04375x51.3375x137.96251'}","display":"${deviceDisplay}","appInstallTimeDiff":${data.appInstallTimeDiff || 1740498108042},"packageVersion":"2.44.0","gyroscope":"${data.gyroscope || '-0.22601996x-0.09453133x0.09040799'}","batteryStatus":${data.batteryStatus || 88},"hasKeyboard":0,"board":"${board}"}`,
             platform: '2',
-            seed_id: `${this.uuid}`,
+            seed_id: `${data.seedId || this.uuid}`,
             seed_time: new Date().getTime() + ''
           }
         },
@@ -1051,10 +1051,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         },
         saveDevice: {
@@ -1062,10 +1062,10 @@ export default class apiTool {
           body: {
             app_version: '2.118.1',
             device_id: data.deviceId,
-            device_name: `${deviceBrand}${modelName}`,
-            os_version: '33',
+            device_name: `${deviceBrand} ${modelName}`,
+            os_version: data.sdkVersion || '33',
             platform: 'Android',
-            registration_id: this.generateSeed(19)
+            registration_id: data.registrationId || this.generateSeed(19)
           }
         }
       }

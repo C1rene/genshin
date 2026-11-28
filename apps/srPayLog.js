@@ -149,7 +149,7 @@ export class srPayLog extends plugin {
   }
 
   payLogHelp (e) {
-    e.reply('星铁充值记录通过stoken生成csc authkey：Dreams/GetList统计古老梦华直充与小月卡，Stellar/GetList识别「无名客的荣勋」680星琼奖励作为大月卡。\n指令：#刷新星铁充值记录\n也兼容Miao-Yunzai的 *刷新充值记录 → #星铁刷新充值记录。')
+    e.reply("先发「#扫码登录」，使用米游社或扫码器扫描二维码登录后，再发「#刷新充值记录」或「*刷新充值记录」获取原神/星铁充值记录。")
   }
 
   async isMain (id, game = 'sr') {

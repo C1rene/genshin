@@ -12,6 +12,7 @@ import MysUser from './mys/MysUser.js'
 import VerificationStats from './VerificationStats.js'
 import SignQueue from './SignQueue.js'
 import GameSignCache from './GameSignCache.js'
+import { sendSignTaskNotice } from './SignTaskNotice.js'
 
 let signing = false
 let finishTime
@@ -60,7 +61,9 @@ export default class MysSign extends base {
                 let uid = uids[g][i]; let ck = cks[g][uid]; let retry = 0
 
                 logger.mark(`[${name}签到]QQ: ${this.e.user_id} ${name}UID: ${uid}`)
-                let verificationUser = VerificationStats.context(this.e, this.e?.user_id)
+                let verificationUser = VerificationStats.context(this.e, this.e?.user_id, {
+                    qq: ck?.qq, cookie: ck?.ck, ltuid: ck?.ltuid
+                })
                 let res = await this.doSign(ck, uid, g, name, verificationUser)
                 if (res.retcode === -1000)
                     while (res.retcode === -1000 && retry < this.set.retry) {
@@ -183,10 +186,9 @@ export default class MysSign extends base {
         }
 
         if (signInfo.retcode !== 0 && signInfo.message?.includes('登录')) {
-            this.e.AutoupCookie = true
-            if (this.mysApi?._ckRefreshResult?.ok) this.e.EmptyStoken = false
+            if (this.mysApi?._ckRefreshResult?.ok) this.EmptyStoken = false
             else await this.upCookie(ck.qq, ck.skid, game, uid)
-            if (!this.e.EmptyStoken) {
+            if (!this.EmptyStoken) {
                 const cookieInfo = await MysInfo.checkUidBing(uid, game)
 
                 // 有 stoken 不代表刷新 CK 一定成功。刷新失败时 checkUidBing 会返回 false；
@@ -331,7 +333,7 @@ export default class MysSign extends base {
         }
 
         if (sign.data?.gt) {
-            VerificationStats.addTriggered(verificationUser)
+            await VerificationStats.addTriggered(verificationUser)
             this.signMsg = '验证码失败'
             sign.message = '验证码失败'
 
@@ -379,7 +381,7 @@ export default class MysSign extends base {
                         logger.mark(`[${name}签到失败]${this.log}：${sign.message} 第${this.ckNum}个`)
                         return false
                     } else {
-                        VerificationStats.addPassed(verificationUser)
+                        await VerificationStats.addPassed(verificationUser)
                         this.signMsg = '验证码成功'
                         logger.mark(`[${name}签到成功]${this.log}:验证码成功 第${this.ckNum}个`)
                         return true
@@ -498,8 +500,8 @@ export default class MysSign extends base {
 
                 let retry = 0
                 let verificationUser = manual
-                    ? VerificationStats.context(this.e, this.e?.user_id)
-                    : VerificationStats.context(null, ck.qq)
+                    ? VerificationStats.context(this.e, this.e?.user_id, { qq: ck?.qq, cookie: ck?.ck, ltuid: ck?.ltuid })
+                    : VerificationStats.context(null, ck.qq, { qq: ck?.qq, cookie: ck?.ck, ltuid: ck?.ltuid })
 
                 let ret = await this.doSign(ck, ck.uid, g, name, verificationUser)
                 if (ret.retcode === -1000)
@@ -555,24 +557,17 @@ export default class MysSign extends base {
     }
 
     async send(manual, msg) {
-        if (manual) {
-            this.e.reply(msg)
-        } else {
-            await common.relpyPrivate(cfg.masterQQ[0], msg)
-            if (this.white.signPush?.length > 0)
-                for (let group of this.white.signPush)
-                    try {
-                        let split = group.split(':')
-                        let group_id = Number(split[1]) || split[1]
-                        await common.sleep(1000)
-                        if (Array.isArray(Bot.uin))
-                            await Bot[split[0]].pickGroup(group_id).sendMsg(msg)
-                        else
-                            await Bot.pickGroup(group_id).sendMsg(msg)
-                    } catch (error) {
-                        logger.error(error)
-                    }
-        }
+        return sendSignTaskNotice(msg, {
+            manual,
+            event: this.e,
+            groups: this.white.signPush,
+            masterQQ: manual ? undefined : cfg.masterQQ,
+            master: manual ? undefined : cfg.master,
+            notifyMaster: manual || this.white.notifyMaster !== false,
+            firstMasterOnly: true,
+            label: '游戏签到推送',
+            waitForGroup: () => common.sleep(1000)
+        })
     }
 
     async getsignNum(uids, length, cks = null) {
@@ -643,10 +638,13 @@ export default class MysSign extends base {
                 continue
             }
 
-            this.e.user_id = qq
-            this.e.ck = MysApi.buildV2Ck({ ltuid: sk.stuid, ltoken, cookieToken, mid: sk.mid })
-            if (await new User(this.e).bing()) {
-                MysApi.ckRefreshCache.set(String(sk.stuid), { at: Date.now(), ret: { ok: true, ck: this.e.ck, ltuid: String(sk.stuid), qq } })
+            // 用继承原事件方法的独立对象承载当前账号，避免改写 this.e.user_id/ck。
+            const refreshEvent = Object.create(this.e || null)
+            refreshEvent.user_id = qq
+            refreshEvent.ck = MysApi.buildV2Ck({ ltuid: sk.stuid, ltoken, cookieToken, mid: sk.mid })
+            refreshEvent.AutoupCookie = true
+            if (await new User(refreshEvent).bing()) {
+                MysApi.ckRefreshCache.set(String(sk.stuid), { at: Date.now(), ret: { ok: true, ck: refreshEvent.ck, ltuid: String(sk.stuid), qq } })
                 MysApi.skScanCache = null
                 refreshed = true
                 logger.mark(`[刷新CK][QQ:${qq}][ltuid:${sk.stuid}]成功`)
@@ -658,10 +656,10 @@ export default class MysSign extends base {
     async getStoken(qq) {
         let sks = await Cfg.getsks(false, qq, false, true)
         if (_.isEmpty(sks)) {
-            this.e.EmptyStoken = true
+            this.EmptyStoken = true
             return false
         } else {
-            this.e.EmptyStoken = false
+            this.EmptyStoken = false
         }
 
         let ltuids = _.map(sks, 'id')

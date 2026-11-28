@@ -549,20 +549,27 @@ export default class MysUser extends BaseModel {
   }
 
   // 删除MysUser用户记录，会反向删除User中的记录及绑定关系
-  async delWithUser(game = 'gs') {
-    // 查找用户
-    let cache = this.getCache(game)
-    let qqArr = await cache.kGet(tables.qq, this.ltuid, true)
-    if (qqArr && qqArr.length > 0) {
-      for (let qq of qqArr) {
-        let user = await NoteUser.create(qq)
-        if (user) {
-          // 调用user删除ck
-          await user.delCk(this.ltuid, false)
-        }
-      }
+  async delWithUser() {
+    // Redis 中旧的 ltuid-qq 表并非所有绑定入口都会维护，改为以 UserDB 为准。
+    const rows = await UserDB.findAll()
+    const owners = (rows || []).filter(row => {
+      if (row?.type && row.type !== 'qq') return false
+      return String(row?.ltuids || '').split(',').map(value => value.trim()).includes(String(this.ltuid))
+    })
+
+    for (const row of owners) {
+      const user = await NoteUser.create(row.id)
+      if (user) await user.delMysUser(this.ltuid)
     }
-    await this.del()
+
+    // 若没有任何 QQ 绑定，直接清理孤立 CK；有绑定但删除失败时不误删共享数据。
+    const remaining = await UserDB.findAll()
+    const stillBound = (remaining || []).some(row => {
+      if (row?.type && row.type !== 'qq') return false
+      return String(row?.ltuids || '').split(',').map(value => value.trim()).includes(String(this.ltuid))
+    })
+    if (!stillBound && owners.length === 0) await this.del()
+    return !stillBound
   }
 
   // 为当前用户添加uid查询记录

@@ -6,6 +6,7 @@ import Data from './Data.js'
 import Cfg from './Cfg.js'
 import BbsSignCache from './BbsSignCache.js'
 import VerificationStats from './VerificationStats.js'
+import { sendSignTaskNotice } from './SignTaskNotice.js'
 import SignQueue from './SignQueue.js'
 import moment from 'moment'
 import _ from 'lodash'
@@ -39,9 +40,10 @@ export default class BBsSign extends base {
             return [{ message: '', retcode: -1 }]
 
         let list = []
-        const verificationUser = VerificationStats.context(e, e.user_id)
-        for (let sk of Object.values(sks))
+        for (let sk of Object.values(sks)) {
+            const verificationUser = VerificationStats.context(e, e.user_id, { qq: sk.userId, community: true, cookie: sk.sk, ltuid: sk.stuid })
             list.push(await BbsSign.getCoinSign(sk, forums, starRail, verificationUser))
+        }
         return list
     }
 
@@ -169,9 +171,8 @@ export default class BBsSign extends base {
 
         let data = BbsSign.getDataList(name)
         let list = []
-        const verificationUser = VerificationStats.context(e, e.user_id)
-
         for (let sk of Object.values(sks)) {
+            const verificationUser = VerificationStats.context(e, e.user_id, { qq: sk.userId, community: true, cookie: sk.sk, ltuid: sk.stuid })
             let res = await BbsSign.getbbsSign(sk, data, 10, verificationUser)
             if (Object.keys(sks).length > 1 && res?.message)
                 res.message = `**通行证ID: ${sk.stuid}**\n${res.message}`
@@ -184,8 +185,6 @@ export default class BBsSign extends base {
         let BbsSign = new BBsSign(e)
         let forumData = BbsSign.ForumData
         let results = []
-        let verificationUser = VerificationStats.context(e, e?.user_id)
-
         for (let qq of [...new Set(targetQQs.map(v => String(v)))]) {
             if (!SignQueue.tryAcquire(qq, 'coin')) {
                 results.push({ qq, message: '前置签到正在执行中' })
@@ -201,6 +200,7 @@ export default class BBsSign extends base {
 
                 let messages = []
                 for (let sk of Object.values(sks)) {
+                    let verificationUser = VerificationStats.context(e, qq, { qq, community: true, cookie: sk.sk, ltuid: sk.stuid })
                     let res = await BbsSign.getbbsSign(sk, forumData, 10, verificationUser)
                     if (Object.keys(sks).length > 1)
                         messages.push(`**通行证ID: ${sk.stuid}**\n${res?.message || '无结果'}`)
@@ -462,8 +462,8 @@ export default class BBsSign extends base {
 
         for (let item of pending) {
             let verificationUser = manual
-                ? VerificationStats.context(this.e, this.e?.user_id)
-                : VerificationStats.context(null, item.sk.userId)
+                ? VerificationStats.context(this.e, this.e?.user_id, { qq: item.sk.userId, community: true, cookie: item.sk.sk, ltuid: item.sk.stuid })
+                : VerificationStats.context(null, item.sk.userId, { qq: item.sk.userId, community: true, cookie: item.sk.sk, ltuid: item.sk.stuid })
 
             // 仅自动米币签到任务中，主人账号升级为完整 #mys全部签到。
             if (item.ownerFull) {
@@ -518,24 +518,14 @@ export default class BBsSign extends base {
     }
 
     async send(manual, msg) {
-        if (manual) {
-            await this.e.reply(msg)
-            return
-        }
-
-        await common.relpyPrivate(cfg.masterQQ[0], msg)
-        if (this.white.bbsPush?.length > 0)
-            for (let group of this.white.bbsPush)
-                try {
-                    let split = group.split(':')
-                    let group_id = Number(split[1]) || split[1]
-                    if (Array.isArray(Bot.uin))
-                        await Bot[split[0]].pickGroup(group_id).sendMsg(msg)
-                    else
-                        await Bot.pickGroup(group_id).sendMsg(msg)
-                } catch (error) {
-                    logger.error(error)
-                }
+        return sendSignTaskNotice(msg, {
+            manual,
+            event: this.e,
+            groups: this.white.bbsPush,
+            masterQQ: manual ? undefined : cfg.masterQQ,
+            master: manual ? undefined : cfg.master,
+            label: '社区签到推送'
+        })
     }
 
     async result(res, userId) {
@@ -552,7 +542,7 @@ export default class BBsSign extends base {
     }
 
     async bbsGeetest(mysApi, type = '', data = {}, verificationUser = {}) {
-        VerificationStats.addTriggered(verificationUser)
+        await VerificationStats.addTriggered(verificationUser)
         let api = Cfg.getConfig('api')
         let vall = new MysApi(mysApi.uid, mysApi.cookie, {}, '', '', 'all')
         let headers = { 'x-rpc-device_fp': this.device_fp }
@@ -600,7 +590,7 @@ export default class BBsSign extends base {
             if (res?.data?.validate || res?.request?.geetest_validate) {
                 res = await mysApi.getData('bbsCaptchaVerify', res?.data || res?.request)
                 if (res?.data?.challenge)
-                    VerificationStats.addPassed(verificationUser)
+                    await VerificationStats.addPassed(verificationUser)
 
                 if (type) {
                     if (res?.data?.challenge)
